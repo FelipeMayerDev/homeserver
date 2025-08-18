@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  discord-bot:
+    build: 
+      context: ./discord-bot
+      dockerfile: Dockerfile
+    container_name: discord-bot
+    env_file:
+      - ./discord-bot/.env
+    volumes:
+      - ./discord-bot:/app
+    restart: unless-stopped
