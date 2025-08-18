@@ -1,22 +1,28 @@
-# Use Python 3.11 slim image as base
-FROM python:3.11-slim
+# Use Node.js 18 slim image as base
+FROM node:18-slim
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies including ffmpeg
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg git && \
+    apt-get install -y --no-install-recommends ffmpeg python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
-COPY requirements.txt .
+# Install yt-dlp
+RUN pip3 install yt-dlp
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy package files
+COPY package*.json ./
+
+# Install Node.js dependencies
+RUN npm install
 
 # Copy source code
 COPY . .
 
+# Expose port (if needed)
+# EXPOSE 3000
+
 # Run the bot
-CMD ["python", "main.py"]
+CMD ["npm", "start"]

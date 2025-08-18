@@ -11,8 +11,9 @@ The first service hosted on this server is a Discord bot that can play music in 
 Features:
 - Play songs from various sources
 - Queue management
-- Volume control
 - Skip, pause, and resume functionality
+- Voice channel join/leave notifications
+- Slash commands for easy interaction
 
 ### Webhook Service
 
@@ -30,8 +31,9 @@ To get started with this project, you'll need to:
 
 1. Clone the repository
 2. Configure the necessary environment variables for each service
-3. Install dependencies with `pip install -r requirements.txt` in each service directory
-4. Run the services with `python main.py` in each service directory
+3. Install dependencies with `npm install` in the discord-bot directory
+4. Register slash commands with `node deploy-commands.js` in the discord-bot directory
+5. Run the services with `npm start` in each service directory
 
 ## Docker
 
@@ -42,6 +44,11 @@ docker-compose up -d
 ```
 
 The webhook service will be available at `http://localhost:8000`.
+
+Note: After the first run, you may need to register the Discord bot slash commands by running:
+```bash
+docker exec -it discord-bot node deploy-commands.js
+```
 
 ## Contributing
 
