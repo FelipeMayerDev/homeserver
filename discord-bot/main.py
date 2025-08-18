@@ -33,6 +33,57 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name="Ready to play music!"))
 
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Notify when someone joins or leaves a voice channel"""
+    # Check if the member is a bot, and if so, ignore the event
+    if member.bot:
+        return
+    
+    # Get the channel where notifications should be sent
+    # This could be improved by making it configurable
+    notification_channel = None
+    for channel in member.guild.text_channels:
+        if channel.name == "general" or "bot" in channel.name.lower():
+            notification_channel = channel
+            break
+    
+    # If no specific channel found, use the first text channel
+    if not notification_channel:
+        notification_channel = member.guild.text_channels[0]
+    
+    # User joined a voice channel
+    if before.channel is None and after.channel is not None:
+        embed = discord.Embed(
+            title="🔊 Voice Channel Joined",
+            description=f"{member.mention} joined {after.channel.mention}",
+            color=0x00ff00
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"User ID: {member.id}")
+        await notification_channel.send(embed=embed)
+    
+    # User left a voice channel
+    elif before.channel is not None and after.channel is None:
+        embed = discord.Embed(
+            title="🔇 Voice Channel Left",
+            description=f"{member.mention} left {before.channel.mention}",
+            color=0xff0000
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"User ID: {member.id}")
+        await notification_channel.send(embed=embed)
+    
+    # User switched voice channels
+    elif before.channel is not None and after.channel is not None and before.channel != after.channel:
+        embed = discord.Embed(
+            title="🔄 Voice Channel Moved",
+            description=f"{member.mention} moved from {before.channel.mention} to {after.channel.mention}",
+            color=0x0000ff
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"User ID: {member.id}")
+        await notification_channel.send(embed=embed)
 
 def get_stream_info(url_or_query: str):
     """Extrai informações de áudio (stream_url, título, etc)"""

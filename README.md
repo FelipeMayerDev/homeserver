@@ -13,6 +13,7 @@ Features:
 - Queue management
 - Volume control
 - Skip, pause, and resume functionality
+- Voice channel join/leave notifications
 
 ### Webhook Service
 
