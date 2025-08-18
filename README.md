@@ -14,14 +14,24 @@ Features:
 - Volume control
 - Skip, pause, and resume functionality
 
+### Webhook Service
+
+A minimal FastAPI webhook service that can receive and process incoming webhooks from external services.
+
+Features:
+- Basic webhook endpoint at `/webhook`
+- Health check endpoint at `/health`
+- Docker support
+- Environment variable configuration
+
 ## Setup
 
 To get started with this project, you'll need to:
 
 1. Clone the repository
-2. Configure the necessary environment variables
-3. Install dependencies with `pip install -r requirements.txt`
-4. Run the bot with `python main.py`
+2. Configure the necessary environment variables for each service
+3. Install dependencies with `pip install -r requirements.txt` in each service directory
+4. Run the services with `python main.py` in each service directory
 
 ## Docker
 
@@ -30,6 +40,8 @@ This project includes a Docker setup for easy deployment:
 ```bash
 docker-compose up -d
 ```
+
+The webhook service will be available at `http://localhost:8000`.
 
 ## Contributing
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   discord-bot:
     build: 
@@ -10,4 +8,17 @@ services:
       - ./discord-bot/.env
     volumes:
       - ./discord-bot:/app
+    restart: unless-stopped
+
+  webhook:
+    build:
+      context: ./webhook
+      dockerfile: Dockerfile
+    container_name: webhook-service
+    env_file:
+      - ./webhook/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./webhook:/app
     restart: unless-stopped
