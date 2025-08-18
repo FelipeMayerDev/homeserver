@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import yt_dlp
 import asyncio
 from collections import defaultdict
+import aiohttp
+import json
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +29,21 @@ current_players = {}  # {guild_id: player}
 queues = defaultdict(list)
 leave_tasks = {}  # {guild_id: task}
 
+
+async def send_webhook_data(data):
+    """Send data to the webhook service"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://webhook-service:8000/webhook",
+                json=data,
+                headers={"Content-Type": "application/json"}
+            ) as response:
+                print(f"Webhook response: {response.status}")
+    except Exception as e:
+        print(f"Error sending to webhook: {e}")
+
+
 @bot.event
 async def on_ready():
     print(f'{bot.user} has logged in!')
@@ -40,50 +57,25 @@ async def on_voice_state_update(member, before, after):
     if member.bot:
         return
     
-    # Get the channel where notifications should be sent
-    # This could be improved by making it configurable
-    notification_channel = None
-    for channel in member.guild.text_channels:
-        if channel.name == "general" or "bot" in channel.name.lower():
-            notification_channel = channel
-            break
-    
-    # If no specific channel found, use the first text channel
-    if not notification_channel:
-        notification_channel = member.guild.text_channels[0]
-    
+    users_in_channel = [m.display_name for m in after.channel.members if not m.bot]
+    webhook_data = {
+        "user": member.display_name,
+        "channel": after.channel.name,
+        "users_in_channel": users_in_channel,
+    }
     # User joined a voice channel
     if before.channel is None and after.channel is not None:
-        embed = discord.Embed(
-            title="🔊 Voice Channel Joined",
-            description=f"{member.mention} joined {after.channel.mention}",
-            color=0x00ff00
-        )
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.set_footer(text=f"User ID: {member.id}")
-        await notification_channel.send(embed=embed)
+        webhook_data["event"] = "joined"
     
     # User left a voice channel
     elif before.channel is not None and after.channel is None:
-        embed = discord.Embed(
-            title="🔇 Voice Channel Left",
-            description=f"{member.mention} left {before.channel.mention}",
-            color=0xff0000
-        )
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.set_footer(text=f"User ID: {member.id}")
-        await notification_channel.send(embed=embed)
+        webhook_data["event"] = "left"
     
     # User switched voice channels
     elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-        embed = discord.Embed(
-            title="🔄 Voice Channel Moved",
-            description=f"{member.mention} moved from {before.channel.mention} to {after.channel.mention}",
-            color=0x0000ff
-        )
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.set_footer(text=f"User ID: {member.id}")
-        await notification_channel.send(embed=embed)
+        webhook_data["event"] = "switched"
+
+    await send_webhook_data(webhook_data)
 
 def get_stream_info(url_or_query: str):
     """Extrai informações de áudio (stream_url, título, etc)"""

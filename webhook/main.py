@@ -22,6 +22,19 @@ async def webhook(request: Request):
     
     print(f"Received webhook: {body.decode()}")
     print(f"Headers: {headers}")
+    
+    # Parse the JSON data
+    try:
+        data = await request.json()
+        if data.get("event") == "joined":
+            user = data.get("user")
+            channel = data.get("channel")
+            users_in_channel = data.get("users_in_channel", [])
+            print(f"{user} joined in {channel}")
+            print(f"Users in this channel: {', '.join(users_in_channel) if users_in_channel else 'No other users'}")
+    except Exception as e:
+        print(f"Error parsing JSON: {e}")
+    
     return {"status": "received", "message": "Webhook processed successfully"}
 
 if __name__ == "__main__":
