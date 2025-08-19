@@ -10,6 +10,17 @@ services:
       - ./discord-bot:/app
     restart: unless-stopped
 
+  telegram-bot:
+    build:
+      context: ./telegram-bot
+      dockerfile: Dockerfile
+    container_name: telegram-bot
+    env_file:
+      - ./telegram-bot/.env
+    volumes:
+      - ./telegram-bot:/app
+    restart: unless-stopped
+
   webhook:
     build:
       context: ./webhook
