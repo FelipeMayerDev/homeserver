@@ -35,7 +35,7 @@ async def send_webhook_data(data):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "http://webhook-service:8000/webhook",
+                "http://webhook-service:8000/discord/voice_state",
                 json=data,
                 headers={"Content-Type": "application/json"}
             ) as response:
@@ -50,32 +50,72 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name="Ready to play music!"))
 
 
+# Store last update time for each user
+last_update = {}
+
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """Notify when someone joins or leaves a voice channel"""
-    # Check if the member is a bot, and if so, ignore the event
+    """Notifica apenas quando alguém entra, sai ou troca de canal de voz."""
+
+    # Ignorar bots
     if member.bot:
         return
-    
-    users_in_channel = [m.display_name for m in after.channel.members if not m.bot]
-    webhook_data = {
-        "user": member.display_name,
-        "channel": after.channel.name,
-        "users_in_channel": users_in_channel,
-    }
-    # User joined a voice channel
-    if before.channel is None and after.channel is not None:
-        webhook_data["event"] = "joined"
-    
-    # User left a voice channel
-    elif before.channel is not None and after.channel is None:
-        webhook_data["event"] = "left"
-    
-    # User switched voice channels
-    elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-        webhook_data["event"] = "switched"
 
+    # Verificar se houve mudança de canal
+    if before.channel == after.channel:
+        return  # mutar/desmutar, câmera, etc → ignorar
+
+    # Cooldown de 60 segundos por usuário
+    now = asyncio.get_event_loop().time()
+    if (last := last_update.get(member.id)) and now - last < 1:
+        return
+
+    # Preparar dados para webhook
+    users_in_channel = []
+    channel_name = None
+    event_type = None
+
+    if after.channel:  # entrou ou trocou
+        users_in_channel = [
+            (m.display_name, m.name.capitalize())
+            for m in after.channel.members
+            if not m.bot
+        ]
+        channel_name = after.channel.name
+
+    elif before.channel:
+        # Quando alguém sai, ainda queremos mostrar os membros restantes no canal
+        users_in_channel = [
+            (m.display_name, m.name.capitalize())
+            for m in before.channel.members
+            if not m.bot
+        ]
+        channel_name = before.channel.name
+
+    # Determinar evento
+    if before.channel is None and after.channel is not None:
+        event_type = "joined"
+    elif before.channel is not None and after.channel is None:
+        event_type = "left"
+    elif before.channel and after.channel and before.channel != after.channel:
+        event_type = "switched"
+
+    # Se não for um evento válido, não faz nada
+    if not event_type:
+        return
+
+    webhook_data = {
+        "user": (member.display_name, member.name.capitalize()),
+        "channel": channel_name,
+        "users_in_channel": users_in_channel,
+        "event": event_type,
+    }
+
+    # Enviar
     await send_webhook_data(webhook_data)
+
+    # Atualizar cooldown
+    last_update[member.id] = now
 
 def get_stream_info(url_or_query: str):
     """Extrai informações de áudio (stream_url, título, etc)"""

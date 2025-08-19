@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 import uvicorn
 import os
 from dotenv import load_dotenv
+from telegram import send_telegram_message, escape_markdown
 
 load_dotenv()
 
@@ -15,25 +16,51 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-@app.post("/webhook")
-async def webhook(request: Request):
-    body = await request.body()
-    headers = dict(request.headers)
-    
-    print(f"Received webhook: {body.decode()}")
-    print(f"Headers: {headers}")
-    
-    # Parse the JSON data
+@app.post("/discord/voice_state")
+async def discord_voice_state(request: Request):
     try:
         data = await request.json()
-        if data.get("event") == "joined":
-            user = data.get("user")
-            channel = data.get("channel")
-            users_in_channel = data.get("users_in_channel", [])
-            print(f"{user} joined in {channel}")
-            print(f"Users in this channel: {', '.join(users_in_channel) if users_in_channel else 'No other users'}")
+        user = data.get("user")
+        channel = data.get("channel")
+        users_in_channel = data.get("users_in_channel", [])
+        event = data.get("event")
+
+        # Escape user and channel names for Markdown
+        user_name = escape_markdown(user[0])
+        user_id = escape_markdown(user[1])
+        channel_name = escape_markdown(channel)
+
+        # Create members list with escaped names
+        members_list = "".join(
+            f"- {escape_markdown(membro[0])} ({escape_markdown(membro[1])})\n"
+            for membro in users_in_channel
+        )
+        message = "Ah do Oruan"
+
+        if event == "joined":
+            message = (
+                f"🎙️ *{user_name}* \\({user_id}\\) entrou em *{channel_name}*\n\n"
+                f"*👥 Membros no canal:*\n{members_list}"
+            )
+        elif event == "left":
+            message = (
+                f"🎙️ *{user_name}* \\({user_id}\\) saiu de *{channel_name}*\n\n"
+                f"*👥 Membros no canal:*\n{members_list}"
+            )
+        elif event == "switched":
+            message = (
+                f"🎙️ *{user_name}* \\({user_id}\\) mudou de canal para *{channel_name}*\n\n"
+                f"*👥 Membros no canal:*\n{members_list}"
+            )
+
+        send_telegram_message(
+            os.getenv("TELEGRAM_BOT_TOKEN"),
+            os.getenv("TELEGRAM_CHAT_ID"),
+            message
+        )
+            
     except Exception as e:
-        print(f"Error parsing JSON: {e}")
+        print(f"Error processing webhook: {e}")
     
     return {"status": "received", "message": "Webhook processed successfully"}
 
