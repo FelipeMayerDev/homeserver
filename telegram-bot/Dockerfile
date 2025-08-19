@@ -1,1 +1,17 @@
-# Use Python 3.11 slim image as base\nFROM python:3.11-slim\n\n# Set working directory\nWORKDIR /app\n\n# Install system dependencies\nRUN apt-get update && \\\n    apt-get install -y --no-install-recommends && \\\n    rm -rf /var/lib/apt/lists/*\n\n# Copy requirements file\nCOPY requirements.txt .\n\n# Install Python dependencies\nRUN pip install --no-cache-dir -r requirements.txt\n\n# Copy source code\nCOPY . .\n\n# Run the bot\nCMD [\"python\", \"main.py\"]
+# Use Python 3.11 slim image as base
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY . .
+
+# Run the bot
+CMD ["python", "main.py"]
