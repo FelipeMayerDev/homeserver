@@ -35,23 +35,22 @@ async def discord_voice_state(request: Request):
             f"- {escape_markdown(membro[0])} ({escape_markdown(membro[1])})\n"
             for membro in users_in_channel
         )
-        message = "Ah do Oruan"
 
         if event == "joined":
             message = (
-                f"🎙️ *{user_name}* \\({user_id}\\) entrou em *{channel_name}*\n\n"
-                f"*👥 Membros no canal:*\n{members_list}"
+                f"🎙️ *{user_name}* (__{user_id}__) entrou em *{channel_name}*"
             )
         elif event == "left":
             message = (
-                f"🎙️ *{user_name}* \\({user_id}\\) saiu de *{channel_name}*\n\n"
-                f"*👥 Membros no canal:*\n{members_list}"
+                f"🎙️ *{user_name}* (__{user_id}__) saiu de *{channel_name}*"
             )
         elif event == "switched":
             message = (
-                f"🎙️ *{user_name}* \\({user_id}\\) mudou de canal para *{channel_name}*\n\n"
-                f"*👥 Membros no canal:*\n{members_list}"
+                f"🎙️ *{user_name}* (__{user_id}__) mudou de canal para *{channel_name}*"
             )
+
+        if members_list:
+            message += f"\n\n*👥 Membros no canal:*\n{members_list}"
 
         send_telegram_message(
             os.getenv("TELEGRAM_BOT_TOKEN"),

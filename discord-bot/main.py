@@ -67,7 +67,7 @@ async def on_voice_state_update(member, before, after):
 
     # Cooldown de 60 segundos por usuário
     now = asyncio.get_event_loop().time()
-    if (last := last_update.get(member.id)) and now - last < 1:
+    if (last := last_update.get(member.id)) and now - last < 60:
         return
 
     # Preparar dados para webhook
