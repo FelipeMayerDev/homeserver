@@ -1,26 +1,7 @@
 import os
 from aiogram import types, Bot
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
-
-
-def escape_markdown(text: str) -> str:
-    """
-    Escape special characters in text for Telegram MarkdownV2
-    
-    Args:
-        text: The text to escape
-        
-    Returns:
-        The escaped text
-    """
-    # Characters that need to be escaped in MarkdownV2
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    
-    # Escape each special character
-    for char in special_chars:
-        text = text.replace(char, f'\\{char}')
-    
-    return text
+import logging
 
 
 async def transcribe_media(message: types.Message, bot: Bot, media_type: str, file_id: str, file_extension: str):
@@ -36,17 +17,17 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
     """
     # Define messages based on media type
     messages = {
-        "video": ("📥 Processando seu vídeo...", "📺 Transcrição do vídeo:\n\n{}"),
-        "video_note": ("📥 Processando sua nota de vídeo...", "📺 Transcrição da nota de vídeo:\n\n{}"),
-        "audio": ("📥 Processando seu áudio...", "🎵 Transcrição do áudio:\n\n{}"),
-        "voice": ("📥 Processando sua mensagem de voz...", "🎤 Transcrição da mensagem de voz:\n\n{}")
+        "video": ("Processando seu vídeo...", "📺 <b>Transcrição do vídeo:</b>\n\n{}"),
+        "video_note": ("Processando sua nota de vídeo...", "📺 <b>Transcrição da nota de vídeo:</b>\n\n{}"),
+        "audio": ("Processando seu áudio...", "🎵 <b>Transcrição do áudio:</b>\n\n{}"),
+        "voice": ("Processando sua mensagem de voz...", "🎤 <b>Transcrição da mensagem de voz:</b>\n\n{}")
     }
     
     # Get appropriate messages
     processing_msg, response_template = messages.get(media_type, ("Processing...", "{}"))
     
     # Send processing message and keep a reference to it
-    processing_message = await message.answer(processing_msg)
+    processing_message = await message.reply(processing_msg)
     
     # Download the media file
     file = await bot.get_file(file_id)
@@ -54,13 +35,11 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
     file_name = f"{media_type}_{message.message_id}.{file_extension}"
     
     await bot.download_file(file_path, file_name)
-    
+    logging.info(f"Downloaded {media_type} file: {file_name}")
     try:
-        # Transcribe the media
         transcription = GROQ_API.transcribe_audio(file_name)
-        # Escape the transcription for MarkdownV2
-        escaped_transcription = escape_markdown(transcription)
-        await processing_message.edit_text(response_template.format(escaped_transcription))
+        logging.info(f"{transcription}")
+        await processing_message.edit_text(response_template.format(transcription))
     except Exception as e:
         # Define error messages based on media type
         error_messages = {
@@ -78,29 +57,20 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
             os.remove(file_name)
 
 
-async def search_and_send_image(message: types.Message, command_parts: list):
+async def search_and_send_image(message: types.Message, query: str):
     """
     Search for an image based on the query and send it to the user
     
     Args:
         message: The Telegram message object
-        command_parts: List containing the command and query
+        query: Str containing the command and query
     """
-    text = message.text
-    command_parts = text.split(" ", 1)
-    if len(command_parts) < 2:
-        return
-    
-    query = command_parts[1]
-    escaped_query = escape_markdown(query)
-    
-    # Send searching message and keep a reference to it
-    searching_message = await message.answer(f"🔍 Procurando imagem de: {escaped_query}")
+    searching_message = await message.answer(f"🔍 Procurando imagem de: {query}")
     
     try:
         image_url = GOOGLE_IMAGE_API.get_image(query)
         if image_url:
-            await message.answer_photo(image_url, caption=f"🖼️ Aqui está uma imagem de: {escaped_query}")
+            await message.answer_photo(image_url, caption=f"🖼️ Aqui está uma imagem de: {query}")
             await searching_message.delete()
         else:
             await searching_message.edit_text("❌ Não foi possível encontrar uma imagem para a sua consulta.")

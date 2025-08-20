@@ -21,7 +21,7 @@ async def cmd_image(message: types.Message):
     command_parts = message.text.split(" ", 1)
     if not command_parts:
         return
-    await search_and_send_image(message, command_parts)
+    await search_and_send_image(message, command_parts[1])
 
 
 @router.message(F.video)
@@ -50,7 +50,7 @@ async def voice_handler(message: types.Message, bot: Bot):
 
 
 async def main():
-    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode='MarkdownV2'))
+    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
     dp = Dispatcher()
     dp.include_router(router)
     await dp.start_polling(bot)
