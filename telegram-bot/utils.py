@@ -2,6 +2,7 @@ import os
 from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
+from yt_dlp import YoutubeDL
 import logging
 
 async def transcribe_media(message: types.Message, bot: Bot, media_type: str, file_id: str, file_extension: str):
@@ -97,3 +98,70 @@ async def search_and_send_image(message: types.Message, query: str):
         query: Str containing the command and query
     """
     await send_image_with_button(message, query)
+
+
+async def send_media_stream(message: types.Message, force_download=False) -> dict:
+    """
+    Extrai a URL do vídeo de um link do YouTube ou de um vídeo do Facebook.
+    """
+    download = False # if "/shorts/" in message.text or force_download else False
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'format': 'best[ext=mp4]',
+        'postprocessor_args': [
+            '-movflags', '+faststart',
+        ],
+        'get_url': True
+    }
+    if download:
+        ydl_opts["format"] = 'best[filesize<50M][ext=mp4]/best[ext=mp4]'
+        ydl_opts["outtmpl"] = 'video.mp4'
+        ydl_opts["postprocessor_args"] = [
+            '-vf', 'scale=-2:720',     # Resize to 720p
+            '-b:v', '1000k',           # Set video bitrate
+            '-b:a', '128k',            # Set audio bitrate
+            '-movflags', '+faststart',
+        ]
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(message.text, download=download)
+
+            if "instagram" in message.text:
+                for f in info["formats"]:
+                    if list(f.keys())[0] == "url":
+                        custom_url = f["url"]
+
+            if download:
+                logging.info("Downloaded video")
+                file_path = ydl.prepare_filename(info)
+
+            video_data = {
+                "url": info.get('url'),
+                "title": info.get('title'),
+                "description": info.get('description')
+            }
+
+            if download:
+                video_data["url"] = file_path
+                video_data["has_been_downloaded"] = True
+                with open(video_data["url"], "rb") as video:
+                    await message.reply_video(
+                        video=video,
+                        reply_to_message_id=message.message_id,
+                        caption=f'***{video_data["title"]}***\n\n{video_data["description"]}',
+                        parse_mode="Markdown"
+                    )
+
+            else:
+                await message.reply_video(
+                    video=video_data["url"], 
+                    reply_to_message_id=message.message_id, 
+                    caption=f'***{video_data["title"]}***', 
+                    parse_mode="Markdown"
+                )
+
+    except Exception as e:
+        logging.error(f"Error extracting video URL: {e}")
+        return "Ocorreu um erro ao extrair a URL."

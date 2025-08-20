@@ -12,7 +12,7 @@ class GroqAPI:
         self.free_whispers_models = ["whisper-large-v3", "distil-whisper-large-v3-en", "whisper-large-v3-turbo"]
 
     def chat(self, prompt):
-        system = ""
+        system = "Você é uma IA em um grupo de amigos que responde perguntas de forma clara e concisa. Responda na linguagem que for perguntado e em html"
         try:
             completion = self.client.chat.completions.create(
                 model="gemma2-9b-it",
