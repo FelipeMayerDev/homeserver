@@ -3,6 +3,26 @@ from aiogram import types, Bot
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
 
 
+def escape_markdown(text: str) -> str:
+    """
+    Escape special characters in text for Telegram MarkdownV2
+    
+    Args:
+        text: The text to escape
+        
+    Returns:
+        The escaped text
+    """
+    # Characters that need to be escaped in MarkdownV2
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    # Escape each special character
+    for char in special_chars:
+        text = text.replace(char, f'\\{char}')
+    
+    return text
+
+
 async def transcribe_media(message: types.Message, bot: Bot, media_type: str, file_id: str, file_extension: str):
     """
     Generic function to handle media transcription
@@ -25,8 +45,8 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
     # Get appropriate messages
     processing_msg, response_template = messages.get(media_type, ("Processing...", "{}"))
     
-    # Send processing message
-    await message.answer(processing_msg)
+    # Send processing message and keep a reference to it
+    processing_message = await message.answer(processing_msg)
     
     # Download the media file
     file = await bot.get_file(file_id)
@@ -38,7 +58,9 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
     try:
         # Transcribe the media
         transcription = GROQ_API.transcribe_audio(file_name)
-        await message.answer(response_template.format(transcription))
+        # Escape the transcription for MarkdownV2
+        escaped_transcription = escape_markdown(transcription)
+        await processing_message.edit_text(response_template.format(escaped_transcription))
     except Exception as e:
         # Define error messages based on media type
         error_messages = {
@@ -49,7 +71,7 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
         }
         
         error_msg = error_messages.get(media_type, "❌ Não foi possível transcrever o arquivo.")
-        await message.answer(error_msg)
+        await processing_message.edit_text(error_msg)
     finally:
         # Clean up the downloaded file
         if os.path.exists(file_name):
@@ -64,17 +86,23 @@ async def search_and_send_image(message: types.Message, command_parts: list):
         message: The Telegram message object
         command_parts: List containing the command and query
     """
-    query = message.text.split(" ", 1)
-    if not query:
+    text = message.text
+    command_parts = text.split(" ", 1)
+    if len(command_parts) < 2:
         return
     
-    await message.answer(f"🔍 Procurando imagem de: {query}")
+    query = command_parts[1]
+    escaped_query = escape_markdown(query)
+    
+    # Send searching message and keep a reference to it
+    searching_message = await message.answer(f"🔍 Procurando imagem de: {escaped_query}")
     
     try:
         image_url = GOOGLE_IMAGE_API.get_image(query)
         if image_url:
-            await message.answer_photo(image_url, caption=f"🖼️ Aqui está uma imagem de: {query}")
+            await message.answer_photo(image_url, caption=f"🖼️ Aqui está uma imagem de: {escaped_query}")
+            await searching_message.delete()
         else:
-            await message.answer("❌ Não foi possível encontrar uma imagem para a sua consulta.")
+            await searching_message.edit_text("❌ Não foi possível encontrar uma imagem para a sua consulta.")
     except Exception as e:
-        await message.answer("❌ Ocorreu um erro ao buscar a imagem.")
+        await searching_message.edit_text("❌ Ocorreu um erro ao buscar a imagem.")
