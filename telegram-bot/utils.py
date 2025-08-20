@@ -3,7 +3,6 @@ from aiogram import types, Bot
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
 import logging
 
-
 async def transcribe_media(message: types.Message, bot: Bot, media_type: str, file_id: str, file_extension: str):
     """
     Generic function to handle media transcription
@@ -38,7 +37,7 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
     logging.info(f"Downloaded {media_type} file: {file_name}")
     try:
         transcription = GROQ_API.transcribe_audio(file_name)
-        logging.info(f"{transcription}")
+
         await processing_message.edit_text(response_template.format(transcription))
     except Exception as e:
         # Define error messages based on media type
@@ -66,7 +65,6 @@ async def search_and_send_image(message: types.Message, query: str):
         query: Str containing the command and query
     """
     searching_message = await message.answer(f"🔍 Procurando imagem de: {query}")
-    
     try:
         image_url = GOOGLE_IMAGE_API.get_image(query)
         if image_url:
