@@ -3,10 +3,11 @@ import logging
 import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, Router, F
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
-from utils import transcribe_media, search_and_send_image
+from utils import transcribe_media, send_image_with_button
 
 load_dotenv()
 
@@ -17,11 +18,20 @@ router = Router()
 
 
 @router.message(Command("image"))
-async def cmd_image(message: types.Message):
-    command_parts = message.text.split(" ", 1)
-    if not command_parts:
+async def cmd_image(message: types.Message, command: CommandObject):
+    if not command.args:
+        await message.reply("Por favor, forneça uma consulta para a imagem. Exemplo: /image cachorro")
         return
-    await search_and_send_image(message, command_parts[1])
+    await send_image_with_button(message, command.args)
+
+
+@router.callback_query(F.data.startswith("another_image:"))
+async def callback_another_image(callback: types.CallbackQuery):
+    query = callback.data.split(":", 1)[1]
+    # Send another image with the same query
+    await send_image_with_button(callback.message, query)
+    # Answer the callback query to remove the loading state
+    await callback.answer()
 
 
 @router.message(F.video)

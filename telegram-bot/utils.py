@@ -1,5 +1,6 @@
 import os
 from aiogram import types, Bot
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
 import logging
 
@@ -56,9 +57,9 @@ async def transcribe_media(message: types.Message, bot: Bot, media_type: str, fi
             os.remove(file_name)
 
 
-async def search_and_send_image(message: types.Message, query: str):
+async def send_image_with_button(message: types.Message, query: str):
     """
-    Search for an image based on the query and send it to the user
+    Search for an image based on the query and send it to the user with a button to request another
     
     Args:
         message: The Telegram message object
@@ -68,9 +69,31 @@ async def search_and_send_image(message: types.Message, query: str):
     try:
         image_url = GOOGLE_IMAGE_API.get_image(query)
         if image_url:
-            await message.answer_photo(image_url, caption=f"🖼️ Aqui está uma imagem de: {query}")
+            # Create inline keyboard with "Pedir outra?" button
+            builder = InlineKeyboardBuilder()
+            builder.add(types.InlineKeyboardButton(
+                text="Pedir outra?",
+                callback_data=f"another_image:{query}"
+            ))
+            
+            await message.reply_photo(
+                image_url, 
+                caption=f"🖼️ Aqui está uma imagem de: {query}",
+                reply_markup=builder.as_markup()
+            )
             await searching_message.delete()
         else:
             await searching_message.edit_text("❌ Não foi possível encontrar uma imagem para a sua consulta.")
     except Exception as e:
         await searching_message.edit_text("❌ Ocorreu um erro ao buscar a imagem.")
+
+
+async def search_and_send_image(message: types.Message, query: str):
+    """
+    Search for an image based on the query and send it to the user
+    
+    Args:
+        message: The Telegram message object
+        query: Str containing the command and query
+    """
+    await send_image_with_button(message, query)
