@@ -8,7 +8,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
-from utils import transcribe_media, send_image_with_button, send_media_stream
+from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link
 
 load_dotenv()
 
@@ -76,7 +76,7 @@ async def text_handler(message: types.Message):
     if len(message.text.split(' ')) > 1:
         return
 
-    if 'https://' in message.text:
+    if 'https://' in message.text and is_valid_link(message.text):
         await send_media_stream(message)
 
 async def main():

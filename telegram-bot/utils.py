@@ -1,6 +1,7 @@
 import os
 from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import LinkPreviewOptions
 from ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from yt_dlp import YoutubeDL
 import logging
@@ -99,12 +100,26 @@ async def search_and_send_image(message: types.Message, query: str):
     """
     await send_image_with_button(message, query)
 
+def is_valid_link(link: str) -> bool:
+    """
+    Check if the link is a valid YouTube or Facebook link
+    """
+    allowed_urls = [
+        "https://x.com/",
+        "https://www.instagram.com/reel/",
+        "https://bsky.app/profile"	
+    ]
+    for url in allowed_urls:
+        if url in link:
+            return True
+    return False
 
 async def send_media_stream(message: types.Message, force_download=False) -> dict:
     """
     Extrai a URL do vídeo de um link do YouTube ou de um vídeo do Facebook.
     """
-    download = False # if "/shorts/" in message.text or force_download else False
+    error_check = False
+    download = True if force_download else False
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
@@ -112,17 +127,11 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
         'postprocessor_args': [
             '-movflags', '+faststart',
         ],
-        'get_url': True
+        'get_url': True,
+        "cookiefile": "cookies.txt"
     }
     if download:
         ydl_opts["format"] = 'best[filesize<50M][ext=mp4]/best[ext=mp4]'
-        ydl_opts["outtmpl"] = 'video.mp4'
-        ydl_opts["postprocessor_args"] = [
-            '-vf', 'scale=-2:720',     # Resize to 720p
-            '-b:v', '1000k',           # Set video bitrate
-            '-b:a', '128k',            # Set audio bitrate
-            '-movflags', '+faststart',
-        ]
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
@@ -134,34 +143,29 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
                         custom_url = f["url"]
 
             if download:
-                logging.info("Downloaded video")
-                file_path = ydl.prepare_filename(info)
+                video_file = ydl.prepare_filename(info)
+                with open(video_file, 'rb') as video:
+                    await message.reply_video(
+                        video=types.FSInputFile(video_file),
+                        caption=f'***{info.get("title")}***',
+                        parse_mode="Markdown"
+                    )
+                os.remove(video_file)
+                return
 
             video_data = {
                 "url": info.get('url'),
                 "title": info.get('title'),
                 "description": info.get('description')
             }
-
-            if download:
-                video_data["url"] = file_path
-                video_data["has_been_downloaded"] = True
-                with open(video_data["url"], "rb") as video:
-                    await message.reply_video(
-                        video=video,
-                        reply_to_message_id=message.message_id,
-                        caption=f'***{video_data["title"]}***\n\n{video_data["description"]}',
-                        parse_mode="Markdown"
-                    )
-
-            else:
-                await message.reply_video(
-                    video=video_data["url"], 
-                    reply_to_message_id=message.message_id, 
-                    caption=f'***{video_data["title"]}***', 
-                    parse_mode="Markdown"
-                )
+            await message.reply_video(
+                video=video_data["url"], 
+                caption=f'***{video_data["title"]}***', 
+                parse_mode="Markdown"
+            )
 
     except Exception as e:
-        logging.error(f"Error extracting video URL: {e}")
-        return "Ocorreu um erro ao extrair a URL."
+        if error_check:
+            await message.reply("❌ Ocorreu um erro ao processar o vídeo.")
+        error_check = True
+        await send_media_stream(message, force_download=True)
