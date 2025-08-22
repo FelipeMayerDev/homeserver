@@ -142,7 +142,9 @@ async def play_next(ctx):
                 del leave_tasks[ctx.guild.id]
                 
             source = discord.FFmpegPCMAudio(
-                song['stream_url'], options="-vn -loglevel panic"
+                song['stream_url'],
+                before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin -extension_picky 0",
+                options="-vn -loglevel error"  # Keep 'error' for debugging; switch to 'panic' later if needed
             )
 
             def after_playing(error):
@@ -155,8 +157,12 @@ async def play_next(ctx):
             await bot.change_presence(activity=discord.Game(name=f'{song["title"]} - {song["uploader"]}'[:32])) # Discord username limit is 32 characters
             embed = discord.Embed(
                 title="🎶 Now Playing",
-                description=f"[{song['title']}]({song['webpage_url']})\n👤 {song['uploader']}",
+                description=f"[{song['title']}]({song['webpage_url']})",
                 color=0x00ff00,
+            )
+            embed.set_author(
+                name=f"Requested by {ctx.author.display_name}",
+                icon_url=ctx.author.avatar.url
             )
             await ctx.send(embed=embed)
 

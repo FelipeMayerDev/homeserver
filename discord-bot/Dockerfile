@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install system dependencies including ffmpeg
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg git && \
+    apt-get install -y --no-install-recommends ffmpeg git libopus0 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file

@@ -76,6 +76,7 @@ async def text_handler(message: types.Message):
     if len(message.text.split(' ')) > 1:
         return
 
+    logging.info(f"IsValidLink: {is_valid_link(message.text)}")
     if 'https://' in message.text and is_valid_link(message.text):
         await send_media_stream(message)
 

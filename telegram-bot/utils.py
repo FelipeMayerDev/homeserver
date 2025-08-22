@@ -107,7 +107,8 @@ def is_valid_link(link: str) -> bool:
     allowed_urls = [
         "https://x.com/",
         "https://www.instagram.com/reel/",
-        "https://bsky.app/profile"	
+        "https://bsky.app/profile",
+        "https://www.youtube.com/shorts/"
     ]
     for url in allowed_urls:
         if url in link:
