@@ -8,17 +8,19 @@ services:
       - ./discord-bot/.env
     volumes:
       - ./discord-bot:/app
+      - ./shared:/app/shared
     restart: unless-stopped
 
   telegram-bot:
     build:
-      context: ./telegram-bot
+      context: ./telegram_bot
       dockerfile: Dockerfile
     container_name: telegram-bot
     env_file:
-      - ./telegram-bot/.env
+      - ./telegram_bot/.env
     volumes:
-      - ./telegram-bot:/app
+      - ./telegram_bot:/app
+      - ./shared:/app/shared
     restart: unless-stopped
 
   webhook:
@@ -32,4 +34,18 @@ services:
       - "8000:8000"
     volumes:
       - ./webhook:/app
+      - ./shared:/app/shared
+    working_dir: /app
+    restart: unless-stopped
+
+  steam:
+    build:
+      context: ./steam
+      dockerfile: Dockerfile
+    container_name: steam-service
+    env_file:
+      - ./steam/.env
+    volumes:
+      - ./steam:/app
+      - ./shared:/app/shared
     restart: unless-stopped

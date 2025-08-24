@@ -8,6 +8,8 @@ from collections import defaultdict
 import aiohttp
 import json
 
+COOLDOWN = 15 
+
 # Load environment variables
 load_dotenv()
 
@@ -28,6 +30,10 @@ bot = commands.Bot(command_prefix='>', intents=intents)
 current_players = {}  # {guild_id: player}
 queues = defaultdict(list)
 leave_tasks = {}  # {guild_id: task}
+# Armazena eventos por canal
+pending_events = defaultdict(list)
+# Tarefas de envio por canal
+send_tasks = {}
 
 
 async def send_webhook_data(data):
@@ -50,72 +56,84 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name="Ready to play music!"))
 
 
-# Store last update time for each user
-last_update = {}
+async def send_pending_events(channel_id):
+    """Envia os eventos acumulados e limpa a lista."""
+    events = pending_events[channel_id]
+    if not events:
+        return
+
+    # Agrupa informações de cada evento
+    users_set = set()
+    messages = []
+    for e in events:
+        user_name = e["user"][0]
+        event_type = e["event"]
+        messages.append(f"{user_name} {event_type}")
+        users_set.update([m[0] for m in e["users_in_channel"]])
+
+    # Criar payload
+    webhook_data = {
+        "channel": events[0]["channel"],
+        "users_in_channel": list(users_set),
+        "events": messages,
+    }
+
+    await send_webhook_data(webhook_data)
+    
+    # Limpar eventos
+    pending_events[channel_id].clear()
+    send_tasks.pop(channel_id, None)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """Notifica apenas quando alguém entra, sai ou troca de canal de voz."""
-
-    # Ignorar bots
+    """Agrupa eventos de mudança de canal de voz com cooldown de 15s."""
     if member.bot:
         return
 
-    # Verificar se houve mudança de canal
     if before.channel == after.channel:
-        return  # mutar/desmutar, câmera, etc → ignorar
-
-    # Cooldown de 60 segundos por usuário
-    now = asyncio.get_event_loop().time()
-    if (last := last_update.get(member.id)) and now - last < 60:
-        return
-
-    # Preparar dados para webhook
-    users_in_channel = []
-    channel_name = None
-    event_type = None
-
-    if after.channel:  # entrou ou trocou
-        users_in_channel = [
-            (m.display_name, m.name.capitalize())
-            for m in after.channel.members
-            if not m.bot
-        ]
-        channel_name = after.channel.name
-
-    elif before.channel:
-        # Quando alguém sai, ainda queremos mostrar os membros restantes no canal
-        users_in_channel = [
-            (m.display_name, m.name.capitalize())
-            for m in before.channel.members
-            if not m.bot
-        ]
-        channel_name = before.channel.name
+        return  # mutar/desmutar, ignorar
 
     # Determinar evento
     if before.channel is None and after.channel is not None:
         event_type = "joined"
+        channel = after.channel
+        users_in_channel = [
+            (m.display_name, m.name.capitalize()) 
+            for m in after.channel.members if not m.bot
+        ]
     elif before.channel is not None and after.channel is None:
         event_type = "left"
+        channel = before.channel
+        users_in_channel = [
+            (m.display_name, m.name.capitalize()) 
+            for m in before.channel.members if not m.bot or m == member
+        ]
     elif before.channel and after.channel and before.channel != after.channel:
         event_type = "switched"
-
-    # Se não for um evento válido, não faz nada
-    if not event_type:
+        channel = after.channel
+        users_in_channel = [
+            (m.display_name, m.name.capitalize()) 
+            for m in after.channel.members if not m.bot
+        ]
+    else:
         return
 
-    webhook_data = {
+    # Adiciona evento à lista pendente
+    pending_events[channel.id].append({
         "user": (member.display_name, member.name.capitalize()),
-        "channel": channel_name,
+        "channel": channel.name,
         "users_in_channel": users_in_channel,
-        "event": event_type,
-    }
+        "event": event_type
+    })
 
-    # Enviar
-    await send_webhook_data(webhook_data)
+    # Se não houver tarefa de envio, cria uma
+    if channel.id not in send_tasks:
+        send_tasks[channel.id] = asyncio.create_task(asyncio.sleep(COOLDOWN))
+        asyncio.create_task(_delayed_send(channel.id))
 
-    # Atualizar cooldown
-    last_update[member.id] = now
+async def _delayed_send(channel_id):
+    await asyncio.sleep(COOLDOWN)
+    await send_pending_events(channel_id)
 
 def get_stream_info(url_or_query: str):
     """Extrai informações de áudio (stream_url, título, etc)"""

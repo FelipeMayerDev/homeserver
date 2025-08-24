@@ -69,8 +69,6 @@ class GroqAPI:
         )
         return chat_completion.choices[0].message.content
 
-GROQ_API = GroqAPI()
-
 class GoogleSearchAPI:
     def __init__(self):
         self.api_key = os.getenv('SERPAPI_API_KEY')
@@ -90,4 +88,7 @@ class GoogleSearchAPI:
                 return images[random_number]
         return ""
 
+
+# Initialize API instances for export
+GROQ_API = GroqAPI()
 GOOGLE_IMAGE_API = GoogleSearchAPI()

@@ -2,12 +2,14 @@ import asyncio
 import logging
 import os
 import yt_dlp
+import sys
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from ai_tools import GROQ_API, GOOGLE_IMAGE_API
+
+from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link
 
 load_dotenv()

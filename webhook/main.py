@@ -2,7 +2,12 @@ from fastapi import FastAPI, Request
 import uvicorn
 import os
 from dotenv import load_dotenv
-from telegram import send_telegram_message, escape_markdown
+from telegram import send_telegram_message, escape_markdown, send_telegram_image
+from shared.ai_tools import GOOGLE_IMAGE_API
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 load_dotenv()
 
@@ -16,52 +21,75 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.post("/steam/profiles")
+async def steam_profiles(request: Request):
+    try:
+        data = await request.json()
+        user, game = data.get("profile"), data.get("game")
+        message = f"🎮 {user} is now playing {game}"
+        query_image = GOOGLE_IMAGE_API.get_image(f"Gameplay {game}")
+        send_telegram_image(
+            os.getenv("TELEGRAM_BOT_TOKEN"),
+            os.getenv("TELEGRAM_CHAT_ID"),
+            image=query_image,
+            caption=message
+        )
+    except Exception as e:
+        print(f"Error receiving data: {e}")	
+
 @app.post("/discord/voice_state")
 async def discord_voice_state(request: Request):
     try:
         data = await request.json()
-        user = data.get("user")
+
         channel = data.get("channel")
         users_in_channel = data.get("users_in_channel", [])
-        event = data.get("event")
+        events = data.get("events", [])
 
-        # Escape user and channel names for Markdown
-        user_name = escape_markdown(user[0])
-        user_id = escape_markdown(user[1])
-        channel_name = escape_markdown(channel)
+        if not channel:
+            return {"status": "ignored"}
 
-        # Create members list with escaped names
-        members_list = "".join(
-            f"- {escape_markdown(membro[0])} ({escape_markdown(membro[1])})\n"
-            for membro in users_in_channel
-        )
+        # Mantém o último status de cada usuário
+        last_status = {}
+        for ev in events:
+            parts = ev.split(" ", 1)
+            if len(parts) == 2:
+                user, action = parts
+                last_status[user] = action.lower()  # sobrescreve sempre
 
-        if event == "joined":
-            message = (
-                f"🎙️ *{user_name}* (__{user_id}__) entrou em *{channel_name}*"
+        # Classifica por tipo de evento
+        joined = [u for u, a in last_status.items() if "joined" in a]
+        left = [u for u, a in last_status.items() if "left" in a]
+        switched = [u for u, a in last_status.items() if "switched" in a]
+
+        messages = []
+
+        if joined:
+            messages.append(f"🎙️ Entraram em *{escape_markdown(channel)}*: {', '.join(joined)}\n")
+        if left:
+            messages.append(f"🎙️ Saíram de *{escape_markdown(channel)}*: {', '.join(left)}\n")
+        if switched:
+            messages.append(f"🎙️ Mudaram de canal para *{escape_markdown(channel)}*: {', '.join(switched)}\n")
+
+        # Só mostra membros se realmente tiver alguém na sala
+        if users_in_channel:
+            members_str = "\n".join([f"- {escape_markdown(u)}" for u in users_in_channel])
+            messages.append(f"👥 Membros em *{escape_markdown(channel)}*:\n{members_str}")
+
+        if messages:
+            final_message = "\n".join(messages)
+            logging.info(f"Enviando mensagem para Telegram: {final_message}")
+            send_telegram_message(
+                os.getenv("TELEGRAM_BOT_TOKEN"),
+                os.getenv("TELEGRAM_CHAT_ID"),
+                final_message
             )
-        elif event == "left":
-            message = (
-                f"🎙️ *{user_name}* (__{user_id}__) saiu de *{channel_name}*"
-            )
-        elif event == "switched":
-            message = (
-                f"🎙️ *{user_name}* (__{user_id}__) mudou de canal para *{channel_name}*"
-            )
 
-        if members_list:
-            message += f"\n\n*👥 Membros no canal:*\n{members_list}"
+        return {"status": "ok"}
 
-        send_telegram_message(
-            os.getenv("TELEGRAM_BOT_TOKEN"),
-            os.getenv("TELEGRAM_CHAT_ID"),
-            message
-        )
-            
     except Exception as e:
-        print(f"Error processing webhook: {e}")
-    
-    return {"status": "received", "message": "Webhook processed successfully"}
+        print("Erro ao processar webhook:", e)
+        return {"status": "error"}
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

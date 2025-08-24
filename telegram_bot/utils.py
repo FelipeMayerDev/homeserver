@@ -2,7 +2,7 @@ import os
 from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
-from ai_tools import GROQ_API, GOOGLE_IMAGE_API
+from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from yt_dlp import YoutubeDL
 import logging
 
