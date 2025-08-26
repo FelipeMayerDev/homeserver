@@ -1,0 +1,3 @@
+# Add your cookies here in the format:
+# cookie_name1=cookie_value1
+# cookie_name2=cookie_value2
