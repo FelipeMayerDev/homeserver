@@ -78,8 +78,10 @@ async def discord_voice_state(request: Request):
 
         if messages:
             final_message = "\n".join(messages)
-            logging.info(f"Enviando mensagem para Telegram: {final_message}")
-            send_telegram_message(
+            logging.info(f"Enviando/atualizando mensagem para Telegram: {final_message}")
+            # Use the new function that can edit existing messages
+            from telegram import send_or_edit_telegram_message
+            send_or_edit_telegram_message(
                 os.getenv("TELEGRAM_BOT_TOKEN"),
                 os.getenv("TELEGRAM_CHAT_ID"),
                 final_message
