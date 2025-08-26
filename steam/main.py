@@ -16,15 +16,21 @@ playing_profiles = {}
 
 # Load cookies from file
 def load_cookies():
-    """Load cookies from cookies.txt file"""
+    """Load cookies from cookies.txt file in Netscape HTTP Cookie File format"""
     cookies = {}
     try:
         with open('cookies.txt', 'r') as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    cookies[key] = value
+                # Skip comments and empty lines
+                if line and not line.startswith('#') and not line.startswith('Netscape'):
+                    # Parse Netscape cookie format
+                    # domain flag path secure expiration name value
+                    parts = line.split('\t')
+                    if len(parts) >= 7:
+                        cookie_name = parts[5]
+                        cookie_value = parts[6]
+                        cookies[cookie_name] = cookie_value
     except FileNotFoundError:
         logger.warning("cookies.txt file not found. Continuing without cookies.")
     except Exception as e:

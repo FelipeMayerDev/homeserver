@@ -42,7 +42,7 @@ To get started with this project, you'll need to:
 1. Clone the repository
 2. Configure the necessary environment variables for each service
 3. Install dependencies with `pip install -r requirements.txt` in each service directory
-4. For the Steam service, create a `cookies.txt` file in the steam directory with your session cookies
+4. For the Steam service, create a `cookies.txt` file in the steam directory with your session cookies in Netscape HTTP Cookie File format (you can export this from your browser)
 5. Run the services with `python main.py` in each service directory
 
 ## Docker
