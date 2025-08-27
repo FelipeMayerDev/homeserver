@@ -27,7 +27,7 @@ The Discord bot now stores all messages (both sent and received) in a SQLite dat
 - `from_bot`: Boolean indicating if the message was sent by the bot
 - `created`: Timestamp of when the message was created
 
-This data is stored in a file named `messages.db` in the discord-bot directory.
+This data is stored in a file named `messages.db` in the root directory, making it accessible to all services.
 
 ### Webhook Service
 

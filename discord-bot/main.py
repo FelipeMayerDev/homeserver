@@ -7,6 +7,9 @@ import asyncio
 from collections import defaultdict
 import aiohttp
 import json
+import sys
+import os.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import History
 
 COOLDOWN = 15 
