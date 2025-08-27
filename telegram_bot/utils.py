@@ -3,8 +3,12 @@ from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
+from yt_dlp.utils import ExtractorError, DownloadError
 from yt_dlp import YoutubeDL
 import logging
+
+class VideoNotFound(Exception):
+    pass
 
 async def transcribe_media(message: types.Message, bot: Bot, media_type: str, file_id: str, file_extension: str):
     """
@@ -137,7 +141,12 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(message.text, download=download)
-
+            if not info.get("url") and not info.get("formats"):
+                resource_id = message.text.split("/")[-1]
+                raise ExtractorError(
+                    f"[{info.get('extractor', 'generic')}] {resource_id}: No video could be found",
+                    expected=True
+                )
             if "instagram" in message.text:
                 for f in info["formats"]:
                     if list(f.keys())[0] == "url":
@@ -164,9 +173,11 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
                 caption=f'***{video_data["title"]}***', 
                 parse_mode="Markdown"
             )
+    except (ExtractorError, DownloadError) as e:
+        raise VideoNotFound(f"❌ Ocorreu um erro ao processar o vídeo. {e}")
 
     except Exception as e:
         if error_check:
-            await message.reply("❌ Ocorreu um erro ao processar o vídeo.")
+            await message.reply(f"❌ Ocorreu um erro ao processar o vídeo. {e}")
         error_check = True
         await send_media_stream(message, force_download=True)

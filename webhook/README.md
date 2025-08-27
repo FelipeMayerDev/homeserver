@@ -9,6 +9,7 @@ This is a minimal FastAPI webhook service that can receive and process incoming 
 - Root endpoint at `/` for service verification
 - Docker support
 - Environment variable configuration
+- Discord voice state tracking with message editing to prevent chat flooding
 
 ## Setup
 
@@ -26,7 +27,7 @@ This is a minimal FastAPI webhook service that can receive and process incoming 
 
 - `GET /` - Service root, confirms the service is running
 - `GET /health` - Health check endpoint
-- `POST /webhook` - Main webhook endpoint that processes incoming requests
+- `POST /discord/voice_state` - Discord voice state webhook endpoint
 
 ## Configuration
 
@@ -49,3 +50,7 @@ To run the service locally for development:
    ```
 
 The service will be available at `http://localhost:8000`.
+
+## Message Editing Feature
+
+To prevent flooding the Telegram chat with multiple messages for the same voice channel events, the service now supports editing existing messages. It keeps track of the last message ID for each Discord channel in a `message_ids.json` file and updates that message instead of sending a new one when new events occur in the same channel.

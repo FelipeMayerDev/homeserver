@@ -8,9 +8,9 @@ from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+from instant_view import generate_telegraph, init_telegraph
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
-from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link
+from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound
 
 load_dotenv()
 
@@ -79,10 +79,17 @@ async def text_handler(message: types.Message):
         return
 
     logging.info(f"IsValidLink: {is_valid_link(message.text)}")
-    if 'https://' in message.text and is_valid_link(message.text):
-        await send_media_stream(message)
+    try:
+        if 'https://' in message.text and is_valid_link(message.text):
+            await send_media_stream(message)
+
+    except VideoNotFound as e:
+        if 'https://x.com/' and '/status/' in message.text:
+            url = await generate_telegraph(message.text)
+            await message.reply(url)
 
 async def main():
+    await init_telegraph()
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
     dp = Dispatcher()
     dp.include_router(router)
