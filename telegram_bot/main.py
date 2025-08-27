@@ -11,8 +11,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound
-
-from database import History
+from shared.database import History
 
 load_dotenv()
 
@@ -114,13 +113,33 @@ def save_message_to_history(message: types.Message, bot: Bot) -> None:
         # Get replied_to message ID if it exists
         replied_to = str(message.reply_to_message.message_id) if message.reply_to_message else None
         
+        # Determine message kind
+        kind = None
+        if message.text:
+            kind = "text"
+        elif message.photo:
+            kind = "photo"
+        elif message.video:
+            kind = "video"
+        elif message.audio:
+            kind = "audio"
+        elif message.voice:
+            kind = "voice"
+        elif message.document:
+            kind = "document"
+        elif message.sticker:
+            kind = "sticker"
+        elif message.video_note:
+            kind = "video_note"
+        
         # Save the message to the database
         history.save_message(
             user=str(message.from_user.username or message.from_user.id) if message.from_user else "Unknown",
             message_id=str(message.message_id),
             text=message.text or "",
             replied_to=replied_to,
-            from_bot=from_bot
+            from_bot=from_bot,
+            kind=kind
         )
         logging.info(f"Message {message.message_id} saved to history")
     except Exception as e:

@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from telegram import send_telegram_message, escape_markdown, send_telegram_image
 from shared.ai_tools import GOOGLE_IMAGE_API
+from shared.database import History
 import logging
 
 # Configurar logging
@@ -13,6 +14,9 @@ load_dotenv()
 
 app = FastAPI(title="Webhook Service")
 
+# Initialize the database
+history = History()
+
 @app.get("/")
 async def root():
     return {"message": "Webhook service is running"}
@@ -20,6 +24,58 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.post("/messages")
+async def save_message(request: Request):
+    """Save a message to the database."""
+    try:
+        data = await request.json()
+        user = data.get("user")
+        message_id = data.get("message_id")
+        text = data.get("text")
+        replied_to = data.get("replied_to")
+        from_bot = data.get("from_bot", False)
+        kind = data.get("kind")
+        
+        # Save to database with kind
+        message_id = history.save_message(user, message_id, text, replied_to, from_bot, kind)
+        return {"status": "success", "message_id": message_id}
+    except Exception as e:
+        logging.error(f"Error saving message: {e}")
+        return {"error": str(e)}
+
+@app.get("/messages/{message_id}")
+async def get_message(message_id: str):
+    """Retrieve a message by its ID."""
+    try:
+        message = history.get_message(message_id)
+        if message:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "not_found"}
+    except Exception as e:
+        logging.error(f"Error retrieving message: {e}")
+        return {"error": str(e)}
+
+@app.get("/messages/user/{user}")
+async def get_messages_by_user(user: str, limit: int = 100):
+    """Retrieve messages sent by a specific user."""
+    try:
+        messages = history.get_messages_by_user(user, limit)
+        return {"status": "success", "messages": messages}
+    except Exception as e:
+        logging.error(f"Error retrieving messages for user {user}: {e}")
+        return {"error": str(e)}
+
+@app.get("/messages")
+async def get_all_messages(limit: int = 100):
+    """Retrieve all messages, ordered by creation time."""
+    try:
+        messages = history.get_all_messages(limit)
+        return {"status": "success", "messages": messages}
+    except Exception as e:
+        logging.error(f"Error retrieving all messages: {e}")
+        return {"error": str(e)}
 
 @app.post("/steam/profiles")
 async def steam_profiles(request: Request):
@@ -84,7 +140,16 @@ async def discord_voice_state(request: Request):
             send_or_edit_telegram_message(
                 os.getenv("TELEGRAM_BOT_TOKEN"),
                 os.getenv("TELEGRAM_CHAT_ID"),
-                final_message
+                final_message,
+                kind="discord_event"
+            )
+            
+            # Also save to database with proper kind
+            history.save_message(
+                user="discord_bot",
+                message_id=f"discord_event_{hash(final_message)}",  # Generate a unique ID
+                text=final_message,
+                kind="discord_event"
             )
 
         return {"status": "ok"}
