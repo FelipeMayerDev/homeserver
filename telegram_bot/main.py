@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import os
-import yt_dlp
 import sys
+import os.path
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command, CommandObject
@@ -11,6 +11,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound
+
+from database import History
 
 load_dotenv()
 
@@ -25,7 +27,8 @@ async def cmd_image(message: types.Message, command: CommandObject):
     if not command.args:
         await message.reply("Por favor, forneça uma consulta para a imagem. Exemplo: /image cachorro")
         return
-    await send_image_with_button(message, command.args)
+    response = await send_image_with_button(message, command.args)
+    save_message_to_history(message, message.bot)
 
 
 @router.message(F.text.contains('@'))
@@ -39,6 +42,7 @@ async def mention_handler(message: types.Message):
         try:
             response = GROQ_API.chat(message.text)
             await message.reply(response)
+            save_message_to_history(message, message.bot)
         except Exception as e:
             logging.error(f"Error processing mention: {e}")
             await message.reply("Desculpe, ocorreu um erro ao processar sua solicitação.")
@@ -51,30 +55,37 @@ async def callback_another_image(callback: types.CallbackQuery):
     await send_image_with_button(callback.message, query)
     # Answer the callback query to remove the loading state
     await callback.answer()
+    save_message_to_history(callback.message, callback.message.bot)
 
 
 @router.message(F.video)
 async def video_handler(message: types.Message, bot: Bot):
     await transcribe_media(message, bot, "video", message.video.file_id, "mp4")
+    save_message_to_history(message, bot)
 
 
 @router.message(F.video_note)
 async def video_note_handler(message: types.Message, bot: Bot):
     await transcribe_media(message, bot, "video_note", message.video_note.file_id, "mp4")
+    save_message_to_history(message, bot)
 
 
 @router.message(F.audio)
 async def audio_handler(message: types.Message, bot: Bot):
     await transcribe_media(message, bot, "audio", message.audio.file_id, "mp3")
+    save_message_to_history(message, bot)
 
 
 @router.message(F.voice)
 async def voice_handler(message: types.Message, bot: Bot):
     await transcribe_media(message, bot, "voice", message.voice.file_id, "ogg")
+    save_message_to_history(message, bot)
 
 
 @router.message(F.text)
-async def text_handler(message: types.Message):
+async def text_handler(message: types.Message, bot: Bot):
+    save_message_to_history(message, bot)
+    
     if len(message.text.split(' ')) > 1:
         return
 
@@ -84,9 +95,37 @@ async def text_handler(message: types.Message):
             await send_media_stream(message)
 
     except VideoNotFound as e:
-        if 'https://x.com/' and '/status/' in message.text:
+        if 'https://x.com/' in message.text and '/status/' in message.text:
             url = await generate_telegraph(message.text)
             await message.reply(url)
+
+
+def save_message_to_history(message: types.Message, bot: Bot) -> None:
+    """Save all messages to the history database."""
+    try:
+        history = History()
+        if not history:
+            logging.error("Failed to initialize History database")
+            return
+        
+        # Determine if the message is from the bot itself
+        from_bot = message.from_user.id == bot.id if message.from_user else False
+        
+        # Get replied_to message ID if it exists
+        replied_to = str(message.reply_to_message.message_id) if message.reply_to_message else None
+        
+        # Save the message to the database
+        history.save_message(
+            user=str(message.from_user.username or message.from_user.id) if message.from_user else "Unknown",
+            message_id=str(message.message_id),
+            text=message.text or "",
+            replied_to=replied_to,
+            from_bot=from_bot
+        )
+        logging.info(f"Message {message.message_id} saved to history")
+    except Exception as e:
+        logging.error(f"Error saving message to history: {e}")
+
 
 async def main():
     await init_telegraph()

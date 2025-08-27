@@ -15,6 +15,19 @@ Features:
 - Skip, pause, and resume functionality
 - Voice channel join/leave notifications
 
+### Message History
+
+The Telegram bot now stores all messages (both sent and received) in a SQLite database for auditing and analysis purposes. The database schema includes:
+- `id`: Auto-incrementing primary key
+- `user`: The user who sent the message (or the bot)
+- `message_id`: The Telegram message ID
+- `text`: The content of the message
+- `replied_to`: The message ID this message is replying to (if any)
+- `from_bot`: Boolean indicating if the message was sent by the bot
+- `created`: Timestamp of when the message was created
+
+This data is stored in a file named `messages.db` in the root directory, making it accessible to all services. Note that this file is intentionally ignored by Git to protect privacy and prevent accidental data leaks.
+
 ### Webhook Service
 
 A minimal FastAPI webhook service that can receive and process incoming webhooks from external services.

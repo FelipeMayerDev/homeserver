@@ -8,7 +8,7 @@ from collections import defaultdict
 import aiohttp
 import json
 
-COOLDOWN = 15 
+COOLDOWN = 15
 
 # Load environment variables
 load_dotenv()
