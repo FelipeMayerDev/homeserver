@@ -90,6 +90,13 @@ async def steam_profiles(request: Request):
             image=query_image,
             caption=message
         )
+        history.save_message(
+            user="steam_bot",
+            from_bot=True,
+            message_id=f"discord_event_{hash(message)}",  # Generate a unique ID
+            text=message,
+            kind="steam_event"
+        )
     except Exception as e:
         print(f"Error receiving data: {e}")	
 
@@ -147,6 +154,7 @@ async def discord_voice_state(request: Request):
             # Also save to database with proper kind
             history.save_message(
                 user="discord_bot",
+                from_bot=True,
                 message_id=f"discord_event_{hash(final_message)}",  # Generate a unique ID
                 text=final_message,
                 kind="discord_event"

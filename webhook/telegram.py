@@ -3,6 +3,7 @@ import re
 import json
 import os
 from shared.database import History
+import logging
 
 # File to store message IDs
 MESSAGE_IDS_FILE = "message_ids.json"
@@ -62,6 +63,7 @@ def send_or_edit_telegram_message(bot_token, chat_id, message, event_key=None, k
     # If kind is "discord_event", try to edit the last discord_event message
     if kind == "discord_event":
         last_message_id = get_last_discord_event_message()
+        logging.info(f"Last discord_event message ID: {last_message_id}")
         if last_message_id:
             # Try to edit the last discord_event message
             url = f"https://api.telegram.org/bot{bot_token}/editMessageText"
