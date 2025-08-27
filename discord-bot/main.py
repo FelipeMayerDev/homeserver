@@ -7,6 +7,7 @@ import asyncio
 from collections import defaultdict
 import aiohttp
 import json
+from database import History
 
 COOLDOWN = 15 
 
@@ -25,6 +26,9 @@ intents.voice_states = True
 
 # Create bot instance
 bot = commands.Bot(command_prefix='>', intents=intents)
+
+# Initialize message history database
+history = History()
 
 # Music queue and player state
 current_players = {}  # {guild_id: player}
@@ -54,6 +58,41 @@ async def send_webhook_data(data):
 async def on_ready():
     print(f'{bot.user} has logged in!')
     await bot.change_presence(activity=discord.Game(name="Ready to play music!"))
+
+
+@bot.event
+async def on_message(message):
+    """Save all messages to the history database."""
+    # Ignore messages from the bot itself to avoid loops
+    if message.author == bot.user:
+        # Save bot's messages
+        replied_to = None
+        if message.reference and message.reference.message_id:
+            replied_to = str(message.reference.message_id)
+        
+        history.save_message(
+            user=str(message.author),
+            message_id=str(message.id),
+            text=message.content,
+            replied_to=replied_to,
+            from_bot=True
+        )
+    else:
+        # Save user messages
+        replied_to = None
+        if message.reference and message.reference.message_id:
+            replied_to = str(message.reference.message_id)
+            
+        history.save_message(
+            user=str(message.author),
+            message_id=str(message.id),
+            text=message.content,
+            replied_to=replied_to,
+            from_bot=False
+        )
+    
+    # Process commands
+    await bot.process_commands(message)
 
 
 async def send_pending_events(channel_id):
