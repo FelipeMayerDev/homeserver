@@ -5,11 +5,11 @@ from typing import Optional
 
 class History:
     def __init__(self, db_path: str = None):
-        # Set default path to root directory
+        # Set default path to the telegram_bot directory
         if db_path is None:
-            # Get the root directory (two levels up from this file's directory)
-            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(root_dir, "messages.db")
+            # Get the telegram_bot directory (where this file is located)
+            telegram_bot_dir = os.path.dirname(os.path.abspath(__file__))
+            db_path = os.path.join(telegram_bot_dir, "messages.db")
         
         self.db_path = db_path
         self.init_db()
