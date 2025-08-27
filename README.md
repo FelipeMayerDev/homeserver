@@ -14,14 +14,13 @@ Features:
 - Volume control
 - Skip, pause, and resume functionality
 - Voice channel join/leave notifications
-- Message history tracking in SQLite database
 
 ### Message History
 
-The Discord bot now stores all messages (both sent and received) in a SQLite database for auditing and analysis purposes. The database schema includes:
+The Telegram bot now stores all messages (both sent and received) in a SQLite database for auditing and analysis purposes. The database schema includes:
 - `id`: Auto-incrementing primary key
 - `user`: The user who sent the message (or the bot)
-- `message_id`: The Discord message ID
+- `message_id`: The Telegram message ID
 - `text`: The content of the message
 - `replied_to`: The message ID this message is replying to (if any)
 - `from_bot`: Boolean indicating if the message was sent by the bot

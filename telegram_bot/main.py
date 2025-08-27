@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import os
-import yt_dlp
 import sys
+import os.path
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command, CommandObject
@@ -11,6 +11,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound
+
+# Add the root directory to the path so we can import the database module
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database import History
 
 load_dotenv()
 
@@ -88,11 +92,45 @@ async def text_handler(message: types.Message):
             url = await generate_telegraph(message.text)
             await message.reply(url)
 
+# Message handlers for saving messages to history
+@router.message()
+async def save_message_to_history(message: types.Message, bot: Bot):
+    """Save all messages to the history database."""
+    # Get the history object from the bot's data
+    history = bot.get('history')
+    
+    if not history:
+        return
+    
+    # Determine if the message is from the bot itself
+    from_bot = message.from_user.id == bot.id if message.from_user else False
+    
+    # Get replied_to message ID if it exists
+    replied_to = str(message.reply_to_message.message_id) if message.reply_to_message else None
+    
+    # Save the message to the database
+    history.save_message(
+        user=str(message.from_user.username or message.from_user.id) if message.from_user else "Unknown",
+        message_id=str(message.message_id),
+        text=message.text or "",
+        replied_to=replied_to,
+        from_bot=from_bot
+    )
+
+
 async def main():
     await init_telegraph()
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
     dp = Dispatcher()
     dp.include_router(router)
+    
+    # Initialize message history database
+    history = History()
+    
+    # Store history object in the bot's data for access in handlers
+    dp['history'] = history
+    bot['history'] = history
+    
     await dp.start_polling(bot)
 
 
