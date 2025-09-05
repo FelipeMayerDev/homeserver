@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 import uvicorn
 import os
 from dotenv import load_dotenv
-from telegram import send_telegram_message, escape_markdown, send_telegram_image
+from telegram import send_telegram_message, escape_markdown, send_telegram_image, send_or_edit_telegram_message
 from shared.ai_tools import GOOGLE_IMAGE_API
 from shared.database import History
 import logging
@@ -80,6 +80,7 @@ async def get_all_messages(limit: int = 100):
 @app.post("/steam/profiles")
 async def steam_profiles(request: Request):
     try:
+        logging.info("Receiving data from Steam...")
         data = await request.json()
         user, game = data.get("profile"), data.get("game")
         message = f"🎮 {user} is now playing {game}"
@@ -93,7 +94,7 @@ async def steam_profiles(request: Request):
         history.save_message(
             user="steam_bot",
             from_bot=True,
-            message_id=f"discord_event_{hash(message)}",  # Generate a unique ID
+            message_id=f"steam_event_{hash(message)}",  # Generate a unique ID
             text=message,
             kind="steam_event"
         )
@@ -143,19 +144,22 @@ async def discord_voice_state(request: Request):
             final_message = "\n".join(messages)
             logging.info(f"Enviando/atualizando mensagem para Telegram: {final_message}")
             # Use the new function that can edit existing messages
-            from telegram import send_or_edit_telegram_message
-            send_or_edit_telegram_message(
+            telegram_response = send_or_edit_telegram_message(
                 os.getenv("TELEGRAM_BOT_TOKEN"),
                 os.getenv("TELEGRAM_CHAT_ID"),
                 final_message,
                 kind="discord_event"
             )
             
-            # Also save to database with proper kind
+            if isinstance(telegram_response, dict):
+                telegram_message_id = telegram_response["result"]["message_id"]
+            else:
+                telegram_message_id = telegram_response.json()["result"]["message_id"]
+            
             history.save_message(
                 user="discord_bot",
                 from_bot=True,
-                message_id=f"discord_event_{hash(final_message)}",  # Generate a unique ID
+                message_id=telegram_message_id,
                 text=final_message,
                 kind="discord_event"
             )
@@ -163,7 +167,8 @@ async def discord_voice_state(request: Request):
         return {"status": "ok"}
 
     except Exception as e:
-        print("Erro ao processar webhook:", e)
+        logging.info(type(telegram_response))
+        print("Erro ao processar webhook:", telegram_response)
         return {"status": "error"}
 
 if __name__ == "__main__":
