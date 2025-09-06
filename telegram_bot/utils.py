@@ -1,11 +1,12 @@
 import os
+import uuid
+import logging
 from aiogram import types, Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import LinkPreviewOptions
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
 from yt_dlp.utils import ExtractorError, DownloadError
 from yt_dlp import YoutubeDL
-import logging
 
 class VideoNotFound(Exception):
     pass
@@ -181,3 +182,61 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
             await message.reply(f"❌ Ocorreu um erro ao processar o vídeo. {e}")
         error_check = True
         await send_media_stream(message, force_download=True)
+
+
+async def process_youtube_video(youtube_url: str) -> str:
+    """
+    Download YouTube video audio, transcribe it, and generate a summary.
+    
+    Args:
+        youtube_url: URL of the YouTube video
+        
+    Returns:
+        Summary of the video content
+    """
+    from shared.ai_tools import GROQ_API
+    import tempfile
+    import uuid
+    
+    # Create a temporary file name
+    temp_filename = f"temp_audio_{uuid.uuid4().hex}.mp3"
+    
+    try:
+        # Download only the audio from YouTube video
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'postprocessor_args': [
+                '-ar', '16000'
+            ],
+            'prefer_ffmpeg': True,
+            'keepvideo': False,
+            'outtmpl': temp_filename.replace('.mp3', ''),  # yt-dlp will add .mp3
+        }
+        
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+            
+        # Check if the file was created
+        if not os.path.exists(temp_filename):
+            raise Exception("Failed to download audio file")
+            
+        # Transcribe the audio
+        transcription = GROQ_API.transcribe_audio(temp_filename)
+        
+        # Generate summary using GROQ API
+        summary_prompt = "Você é uma ferramenta de resumir e summarizar conteúdos, retorne o resumo do que foi dito nesse video.. seja breve mas consiso. Responda apenas em texto.. NOT ALLOWED MARKDOWN AND HTML"
+        summary = GROQ_API.chat(f"{summary_prompt}\n\n{transcription}")
+        
+        return summary
+        
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)

@@ -46,7 +46,7 @@ def get_last_discord_event_message():
     try:
         history = History()
         # Get last 5 messages
-        messages = history.get_all_messages(1)
+        messages = history.get_all_messages(3)
         # Look for a message with kind="discord_event"
         for message in messages:
             # message format: (id, user, message_id, text, replied_to, from_bot, kind, created)

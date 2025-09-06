@@ -10,7 +10,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
 from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
-from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound
+from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound, process_youtube_video
 from shared.database import History
 
 load_dotenv()
@@ -28,6 +28,28 @@ async def cmd_image(message: types.Message, command: CommandObject):
         return
     response = await send_image_with_button(message, command.args)
     save_message_to_history(message, message.bot)
+
+
+@router.message(Command("resume"))
+async def cmd_resume(message: types.Message, command: CommandObject):
+    if not command.args:
+        await message.reply("Por favor, forneça um link de um vídeo do YouTube. Exemplo: /resume https://www.youtube.com/watch?v=example")
+        return
+    
+    # Check if it's a valid YouTube link
+    if "youtube.com" not in command.args and "youtu.be" not in command.args:
+        await message.reply("Por favor, forneça um link válido do YouTube.")
+        return
+    
+    try:
+        # Process the YouTube video
+        processing_message = await message.reply("Processando seu vídeo...")
+        summary = await process_youtube_video(command.args)
+        await processing_message.edit_text(f"📝 <b>Resumo do vídeo:</b>\n\n{summary}", parse_mode="HTML")
+        save_message_to_history(message, message.bot)
+    except Exception as e:
+        logging.error(f"Error processing YouTube video: {e}")
+        await message.reply("Desculpe, ocorreu um erro ao processar o vídeo.")
 
 
 @router.message(F.text.contains('@'))
