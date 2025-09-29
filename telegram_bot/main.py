@@ -56,9 +56,17 @@ async def cmd_resume(message: types.Message, command: CommandObject):
 async def cmd_tldr(message: types.Message, command: CommandObject):
     try:
         # Get message limit (default 100)
+        if command.args and command.args.strip():
+            try:
+                limit = int(command.args.strip())
+            except ValueError:
+                await message.reply("❌ Número inválido. Use: /tldr ou /tldr [número]")
+                return
+        else:
+            limit = 100
+
+        # Get message limit (default 100)
         limit = int(command.args) if command.args and command.args.isdigit() else 100
-        limit = min(limit, 300)  # maximum 300 messages
-        
         processing_message = await message.reply("🔄 Analisando mensagens...")
         
         history = History()
@@ -80,7 +88,7 @@ async def cmd_tldr(message: types.Message, command: CommandObject):
             return
         
         # Generate AI summary
-        prompt = f"Faça um resumo conciso das principais discussões desta conversa em português:\n\n{conversation}"
+        prompt = f"Faça um resumo conciso das principais discussões desta conversa em português:\n\n{conversation} Retorne sem tags HTML."
         summary = GROQ_API.chat(prompt)
         
         if not summary or summary.strip() == "":
@@ -97,12 +105,14 @@ async def cmd_tldr(message: types.Message, command: CommandObject):
         
         await processing_message.edit_text(response, parse_mode="HTML")
         save_message_to_history(message, message.bot)
-        
-    except ValueError:
-        await processing_message.edit_text("❌ Número inválido. Use: /tldr ou /tldr [número]")
+
     except Exception as e:
         logging.error(f"Error generating TLDR: {e}")
-        await processing_message.edit_text("❌ Erro ao gerar resumo.")
+        # Try to edit if processing_message exists, otherwise reply to original
+        try:
+            await processing_message.edit_text("❌ Erro ao gerar resumo.")
+        except:
+            await message.reply("❌ Erro ao gerar resumo.")
 
 
 def prepare_messages_for_tldr(messages, max_chars=4000):
@@ -121,11 +131,13 @@ def prepare_messages_for_tldr(messages, max_chars=4000):
     
     for msg in reversed(messages):  # most recent first
         # Handle potential database schema variations
-        if len(msg) < 7:
+        if len(msg) < 8:
             stats['media_ignored'] += 1
             continue
             
-        user, message_id, text, replied_to, from_bot, kind, created = msg
+        # Database schema: id, user, message_id, text, replied_to, from_bot, kind, created
+        # Skip the id field and unpack the rest
+        _, user, message_id, text, replied_to, from_bot, kind, created = msg
         
         # Skip if it's from a bot
         if from_bot:
@@ -218,6 +230,7 @@ async def mention_handler(message: types.Message):
     if message.text:
         try:
             response = GROQ_API.chat(message.text)
+            logging.info(f"Mention response: {response}")
             await message.reply(response)
             save_message_to_history(message, message.bot)
         except Exception as e:
