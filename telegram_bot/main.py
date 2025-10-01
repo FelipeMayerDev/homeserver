@@ -126,7 +126,9 @@ def prepare_messages_for_tldr(messages, max_chars=4000):
         'commands_ignored': 0,
         'short_ignored': 0,
         'emoji_ignored': 0,
-        'oldest_message': None
+        'oldest_message': None,
+        'user_counts': {},
+        'user_characters': {}
     }
     
     for msg in reversed(messages):  # most recent first
@@ -179,6 +181,18 @@ def prepare_messages_for_tldr(messages, max_chars=4000):
         # Valid message - add to filtered list
         filtered.append(f"{user}: {text}")
         
+        # Count messages by user
+        if user in stats['user_counts']:
+            stats['user_counts'][user] += 1
+        else:
+            stats['user_counts'][user] = 1
+        
+        # Count characters by user
+        if user in stats['user_characters']:
+            stats['user_characters'][user] += len(text)
+        else:
+            stats['user_characters'][user] = len(text)
+        
         # Mark first included message (oldest)
         if stats['oldest_message'] is None:
             stats['oldest_message'] = (user, created)
@@ -197,9 +211,31 @@ def format_tldr_stats(stats):
                     stats['links_ignored'] + stats['commands_ignored'] + 
                     stats['short_ignored'] + stats['emoji_ignored'])
     
-    stats_text = f"\n\n📊 <b>Estatísticas:</b>\n"
+    stats_text = "\n\n📊 <b>Estatísticas:</b>\n"
     stats_text += f"• {stats['total_messages']} mensagens analisadas\n"
     stats_text += f"• {total_ignored} ignoradas ({stats['media_ignored']} mídias, {stats['bots_ignored']} bots, etc.)\n"
+    
+    # Add user statistics (messages and characters)
+    if stats['user_counts']:
+        # Find who talked the most (by characters)
+        if stats['user_characters']:
+            most_talkative_user = max(stats['user_characters'].items(), key=lambda x: x[1])
+            user_name, char_count = most_talkative_user
+            
+            # Special message for Wdiegon
+            if user_name.lower() == "wdiegon":
+                stats_text += f"• Quem falou mais: {user_name}, rei do lero lero\n"
+            else:
+                stats_text += f"• Quem falou mais: {user_name}\n"
+        
+        stats_text += "• Atividade por usuário:\n"
+        # Sort users by message count (descending)
+        sorted_users = sorted(stats['user_counts'].items(), key=lambda x: x[1], reverse=True)
+        for user, msg_count in sorted_users[:5]:  # Show top 5 users
+            char_count = stats['user_characters'].get(user, 0)
+            stats_text += f"  - {user}: {msg_count} msgs, {char_count} chars\n"
+        if len(sorted_users) > 5:
+            stats_text += f"  - E mais {len(sorted_users) - 5} usuários...\n"
     
     if stats['oldest_message']:
         user, created = stats['oldest_message']
