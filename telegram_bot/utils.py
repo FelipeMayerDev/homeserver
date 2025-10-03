@@ -112,6 +112,7 @@ def is_valid_link(link: str) -> bool:
     allowed_urls = [
         "https://x.com/",
         "https://www.instagram.com/reel/",
+        "https://www.instagram.com/p/",
         "https://bsky.app/profile",
         "https://www.youtube.com/shorts/"
     ]
