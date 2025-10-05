@@ -9,7 +9,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
-from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API
+from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API, OLLAMA_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound, process_youtube_video
 from shared.database import History
 
@@ -89,7 +89,10 @@ async def cmd_tldr(message: types.Message, command: CommandObject):
         
         # Generate AI summary
         prompt = f"Faça um resumo conciso das principais discussões desta conversa em português:\n\n{conversation} Retorne sem tags HTML."
-        summary = GROQ_API.chat(prompt)
+        if OLLAMA_API.is_avaiable():
+            summary = OLLAMA_API.chat(prompt)
+        else:
+            summary = GROQ_API.chat(prompt)
         
         if not summary or summary.strip() == "":
             await processing_message.edit_text("❌ Erro ao gerar resumo com IA.")

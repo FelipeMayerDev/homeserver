@@ -7,3 +7,4 @@ aiohttp==3.10.5
 yt-dlp==2025.8.20
 telegraph==2.2.0
 tweepy
+ollama

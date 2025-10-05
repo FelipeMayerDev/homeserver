@@ -3,6 +3,8 @@ from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
 from random import randint
+import ollama
+import requests
 
 load_dotenv()
 
@@ -89,6 +91,40 @@ class GoogleSearchAPI:
         return ""
 
 
+class OllamaAPI:
+    def __init__(self):
+        self.client = ollama.Client(host=os.getenv("OLLAMA_HOST"))
+
+    def is_avaiable(self):
+        req = requests.get(f'{os.getenv("OLLAMA_HOST")}/api/tags')
+        if req.status_code != 200:
+            return False
+        return True
+
+    def chat(self, prompt):
+        system="""
+        Você é uma IA em um grupo de amigos que responde perguntas de forma clara e concisa.
+        Responda na linguagem que for perguntado e não utilize tags html
+        """
+        try:
+            response = self.client.chat(
+                model='granite4:micro',
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': system,
+                    },
+                    {
+                        'role': 'user',
+                        'content': prompt,
+                    },
+                ])
+            return response['message']['content']
+        except Exception as e:
+            raise e
+
+
 # Initialize API instances for export
 GROQ_API = GroqAPI()
+OLLAMA_API = OllamaAPI()
 GOOGLE_IMAGE_API = GoogleSearchAPI()
