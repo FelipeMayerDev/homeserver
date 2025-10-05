@@ -16,6 +16,7 @@ services:
       context: ./telegram_bot
       dockerfile: Dockerfile
     container_name: telegram-bot
+    network_mode: bridge
     env_file:
       - ./telegram_bot/.env
     volumes:
