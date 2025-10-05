@@ -93,10 +93,11 @@ class GoogleSearchAPI:
 
 class OllamaAPI:
     def __init__(self):
-        self.client = ollama.Client(host=os.getenv("OLLAMA_HOST"))
+        self.client = ollama.Client(host=f'http://{os.getenv("OLLAMA_HOST")}')
 
     def is_avaiable(self):
-        req = requests.get(f'{os.getenv("OLLAMA_HOST")}/api/tags')
+        host = f'http://{os.getenv("OLLAMA_HOST")}/api/tags'
+        req = requests.get(host)
         if req.status_code != 200:
             return False
         return True
