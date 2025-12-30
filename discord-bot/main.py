@@ -138,13 +138,26 @@ async def _delayed_send(channel_id):
 def get_stream_info(url_or_query: str):
     """Extrai informações de áudio (stream_url, título, etc)"""
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio/best[ext!=webm]/best[ext!=webm]/bestaudio/best/best',
         'quiet': True,
         'noplaylist': False,
+        'extractaudio': False,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url_or_query, download=False)
-        return info
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url_or_query, download=False)
+            return info
+    except yt_dlp.DownloadError as e:
+        if "Requested format is not available" in str(e) or "format" in str(e).lower():
+            # If the preferred format is not available, try with a more flexible format
+            ydl_opts_alt = ydl_opts.copy()
+            ydl_opts_alt["format"] = "bestaudio/best/best[ext!=webm]/best"
+            with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
+                info = ydl.extract_info(url_or_query, download=False)
+                return info
+        else:
+            raise e
+    return info
 
 
 async def play_next(ctx):

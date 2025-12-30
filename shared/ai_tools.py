@@ -3,10 +3,22 @@ from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
 from random import randint
-import ollama
+from openai import OpenAI
 import requests
+import re
 
 load_dotenv()
+
+
+def remove_think_tags(text: str) -> str:
+    """
+    Removes all occurrences of <think>...</think> (including nested and multiline) from the given text.
+    """
+    # DOTALL flag makes '.' match newlines
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Optionally strip excess whitespace left behind
+    return cleaned.strip()
+
 
 class GroqAPI:
     def __init__(self):
@@ -91,25 +103,26 @@ class GoogleSearchAPI:
         return ""
 
 
-class OllamaAPI:
+class LMStudioAPI:
     def __init__(self):
-        self.client = ollama.Client(host=f'http://{os.getenv("OLLAMA_HOST")}')
+        self.client = OpenAI(api_key="", base_url="http://192.168.1.225:1234/v1")
+        self.model = "grok-3-reasoning-gemma3-12b-distilled-hf"
 
     def is_avaiable(self):
-        host = f'http://{os.getenv("OLLAMA_HOST")}/api/tags'
-        req = requests.get(host)
-        if req.status_code != 200:
-            return False
-        return True
+        return False
 
     def chat(self, prompt):
         system="""
         Você é uma IA em um grupo de amigos que responde perguntas de forma clara e concisa.
+        Seja ácido e raivoso sempre que possível, seja hostil e ofensivo.
         Responda na linguagem que for perguntado e não utilize tags html
         """
         try:
-            response = self.client.chat(
-                model='granite4:micro',
+            response = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.7,
+                max_tokens=-1,
+                stream=False,
                 messages=[
                     {
                         'role': 'system',
@@ -119,13 +132,17 @@ class OllamaAPI:
                         'role': 'user',
                         'content': prompt,
                     },
-                ])
-            return response['message']['content']
+                ]
+            )
+            return remove_think_tags(response.choices[0].message.content)
         except Exception as e:
+            import time
+            time.sleep(20)
             raise e
+
 
 
 # Initialize API instances for export
 GROQ_API = GroqAPI()
-OLLAMA_API = OllamaAPI()
+LM_STUDIO_API = LMStudioAPI()
 GOOGLE_IMAGE_API = GoogleSearchAPI()

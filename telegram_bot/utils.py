@@ -130,15 +130,15 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
-        'format': 'best[ext=mp4]',
+        'format': 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best',
         'postprocessor_args': [
             '-movflags', '+faststart',
         ],
         'get_url': True,
-        "cookiefile": "cookies.txt"
+        'cookiefile': 'cookies.txt'
     }
     if download:
-        ydl_opts["format"] = 'best[filesize<50M][ext=mp4]/best[ext=mp4]'
+        ydl_opts["format"] = 'best[filesize<50M][height<=720][ext=mp4]/best[filesize<50M][ext=mp4]/best[height<=720][ext=mp4]/best[ext=mp4]/best'
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
@@ -175,6 +175,47 @@ async def send_media_stream(message: types.Message, force_download=False) -> dic
                 caption=f'***{video_data["title"]}***', 
                 parse_mode="Markdown"
             )
+    except ExtractorError as e:
+        if "Requested format is not available" in str(e) or "format" in str(e).lower():
+            # If the preferred format is not available, try with a more flexible format
+            ydl_opts_alt = {
+                'quiet': True,
+                'no_warnings': True,
+                'format': 'best[ext=mp4]/best[ext=webm]/best',
+                'postprocessor_args': [
+                    '-movflags', '+faststart',
+                ],
+                'get_url': True,
+                'cookiefile': 'cookies.txt'
+            }
+            try:
+                with YoutubeDL(ydl_opts_alt) as ydl:
+                    info = ydl.extract_info(message.text, download=download)
+                    if download:
+                        video_file = ydl.prepare_filename(info)
+                        with open(video_file, 'rb') as video:
+                            await message.reply_video(
+                                video=types.FSInputFile(video_file),
+                                caption=f'***{info.get("title")}***',
+                                parse_mode="Markdown"
+                            )
+                        os.remove(video_file)
+                        return
+
+                    video_data = {
+                        "url": info.get('url'),
+                        "title": info.get('title'),
+                        "description": info.get('description')
+                    }
+                    await message.reply_video(
+                        video=video_data["url"], 
+                        caption=f'***{video_data["title"]}***', 
+                        parse_mode="Markdown"
+                    )
+            except Exception as e_alt:
+                raise VideoNotFound(f"❌ Ocorreu um erro ao processar o vídeo mesmo com formato alternativo. {e_alt}")
+        else:
+            raise VideoNotFound(f"❌ Ocorreu um erro ao processar o vídeo. {e}")
     except (ExtractorError, DownloadError) as e:
         raise VideoNotFound(f"❌ Ocorreu um erro ao processar o vídeo. {e}")
 
@@ -236,6 +277,44 @@ async def process_youtube_video(youtube_url: str) -> str:
         summary = GROQ_API.chat(f"{summary_prompt}\n\n{transcription}")
         
         return summary
+        
+    except DownloadError as e:
+        if "Requested format is not available" in str(e) or "format" in str(e).lower():
+            # If the preferred format is not available, try with a more flexible format
+            ydl_opts_alt = {
+                'quiet': True,
+                'no_warnings': True,
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'postprocessor_args': [
+                    '-ar', '16000'
+                ],
+                'prefer_ffmpeg': True,
+                'keepvideo': False,
+                'outtmpl': temp_filename.replace('.mp3', ''),  # yt-dlp will add .mp3
+            }
+            
+            with YoutubeDL(ydl_opts_alt) as ydl:
+                ydl.download([youtube_url])
+                
+            # Check if the file was created
+            if not os.path.exists(temp_filename):
+                raise Exception("Failed to download audio file with alternative format")
+                
+            # Transcribe the audio
+            transcription = GROQ_API.transcribe_audio(temp_filename)
+            
+            # Generate summary using GROQ API
+            summary_prompt = "Você é uma ferramenta de resumir e summarizar conteúdos, retorne o resumo do que foi dito nesse video.. seja breve mas consiso. Responda apenas em texto.. NOT ALLOWED MARKDOWN AND HTML"
+            summary = GROQ_API.chat(f"{summary_prompt}\n\n{transcription}")
+            
+            return summary
+        else:
+            raise e
         
     finally:
         # Clean up the temporary file
