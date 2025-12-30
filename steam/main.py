@@ -11,8 +11,14 @@ logger = logging.getLogger(__name__)
 cooldown_time = int(os.getenv("COOLDOWN_TIME", 60))
 
 profiles_to_watch = os.getenv("PROFILES", "").split(",") if os.getenv("PROFILES") else []
-steam_profile_url = 'https://steamcommunity.com/id/{profile}/'
 playing_profiles = {}
+
+def get_profile_url(profile):
+    """Get correct Steam URL based on whether profile is numeric ID or custom name"""
+    if profile.strip().isdigit():
+        return f'https://steamcommunity.com/profiles/{profile}/'
+    else:
+        return f'https://steamcommunity.com/id/{profile}/'
 
 # Load cookies from file
 def load_cookies():
@@ -69,24 +75,24 @@ def send_to_webhook(data):
 def get_playing_profiles(profiles_to_watch) -> dict:
     # Load cookies each time in case they change
     cookies = load_cookies()
-    
+
     for profile in profiles_to_watch:
         game = None
         status = SteamKind.NOT_PLAYING
-        
+
         try:
             response = requests.get(
-                steam_profile_url.format(profile=profile),
+                get_profile_url(profile),
                 headers=HEADERS,
                 cookies=cookies
             )
             response.raise_for_status()
-            
+
             soup = BeautifulSoup(response.content, 'html.parser')
 
             profile_element = soup.find("div", class_="profile_in_game_header")
             game_element = soup.find("div", class_="profile_in_game_name")
-            
+
             if profile_element and SteamKind.PLAYING in profile_element.get_text(strip=True):
                 status = SteamKind.PLAYING
                 if game_element:
@@ -110,7 +116,7 @@ def get_playing_profiles(profiles_to_watch) -> dict:
                 "game": None,
                 "error": str(e)
             }
-    
+
     time.sleep(cooldown_time)
     return playing_profiles
 
@@ -118,8 +124,7 @@ def get_playing_profiles(profiles_to_watch) -> dict:
 def main():
     while True:
         profiles = get_playing_profiles(profiles_to_watch)
-    
+
 
 if __name__ == "__main__":
     main()
-
