@@ -30,15 +30,15 @@ class GroqAPI:
     def chat(self, prompt):
         current_time = time.time()
         time_since_last_call = current_time - self.last_chat_call_time
-        
+
         if time_since_last_call < 30:
             return "Espera ai brota, aqui tem limite pq eh de gratis"
-        
+
         self.last_chat_call_time = time.time()
         system = "Você é uma IA em um grupo de amigos que responde perguntas de forma clara e concisa. Responda na linguagem que for perguntado e em html"
         try:
             completion = self.client.chat.completions.create(
-                model="gemma2-9b-it",
+                model="llama-3.1-8b-instant",
                 messages=[
                     {
                         "role": "system",
