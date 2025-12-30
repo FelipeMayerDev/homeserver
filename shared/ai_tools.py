@@ -1,4 +1,5 @@
 import os
+import time
 from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
@@ -24,8 +25,16 @@ class GroqAPI:
     def __init__(self):
         self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         self.free_whispers_models = ["whisper-large-v3", "distil-whisper-large-v3-en", "whisper-large-v3-turbo"]
+        self.last_chat_call_time = 0
 
     def chat(self, prompt):
+        current_time = time.time()
+        time_since_last_call = current_time - self.last_chat_call_time
+        
+        if time_since_last_call < 30:
+            return "Espera ai brota, aqui tem limite pq eh de gratis"
+        
+        self.last_chat_call_time = time.time()
         system = "Você é uma IA em um grupo de amigos que responde perguntas de forma clara e concisa. Responda na linguagem que for perguntado e em html"
         try:
             completion = self.client.chat.completions.create(
@@ -46,7 +55,7 @@ class GroqAPI:
             )
             return completion.choices[0].message.content
         except:
-            raise Exception("Rate limit exceeded")
+            return "Espera ai brota, aqui tem limite pq eh de gratis"
 
     def transcribe_audio(self, filename):
         for model in self.free_whispers_models:
