@@ -1,65 +1,48 @@
 import requests
-from bs4 import BeautifulSoup
 import os
 import logging
 import time
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-cooldown_time = int(os.getenv("COOLDOWN_TIME", 60))
+active_check_interval = int(os.getenv("ACTIVE_CHECK_INTERVAL", 30))
+offline_check_interval = int(os.getenv("OFFLINE_CHECK_INTERVAL", 300))
+steam_api_key = os.getenv("STEAM_API_KEY")
 
 profiles_to_watch = os.getenv("PROFILES", "").split(",") if os.getenv("PROFILES") else []
 playing_profiles = {}
 
-def get_profile_url(profile):
-    """Get correct Steam URL based on whether profile is numeric ID or custom name"""
-    if profile.strip().isdigit():
-        return f'https://steamcommunity.com/profiles/{profile}/'
-    else:
-        return f'https://steamcommunity.com/id/{profile}/'
+STEAM_API_BASE = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+COMMUNITY_RESOLVE_URL = "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/"
 
-# Load cookies from file
-def load_cookies():
-    """Load cookies from cookies.txt file in Netscape HTTP Cookie File format"""
-    cookies = {}
+def resolve_vanity_url(vanity_url):
+    """Resolve vanity URL to Steam64 ID"""
+    if not steam_api_key:
+        logger.error("STEAM_API_KEY not set")
+        return None
+
     try:
-        with open('cookies.txt', 'r') as f:
-            for line in f:
-                line = line.strip()
-                # Skip comments and empty lines
-                if line and not line.startswith('#') and not line.startswith('Netscape'):
-                    # Parse Netscape cookie format
-                    # domain flag path secure expiration name value
-                    parts = line.split('\t')
-                    if len(parts) >= 7:
-                        cookie_name = parts[5]
-                        cookie_value = parts[6]
-                        cookies[cookie_name] = cookie_value
-    except FileNotFoundError:
-        logger.warning("cookies.txt file not found. Continuing without cookies.")
+        response = requests.get(
+            COMMUNITY_RESOLVE_URL,
+            params={"key": steam_api_key, "vanityurl": vanity_url}
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if data["response"]["success"] == 1:
+            return data["response"]["steamid"]
+        return None
     except Exception as e:
-        logger.error(f"Error loading cookies: {e}")
-    return cookies
+        logger.error(f"Error resolving vanity URL {vanity_url}: {e}")
+        return None
 
-# Realistic headers to mimic a real browser
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip, deflate',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Cache-Control': 'max-age=0'
-}
-
-class SteamKind:
-    PLAYING = "Currently In-Game"
-    NOT_PLAYING = "Not Playing"
+def get_steam_id(profile):
+    """Get Steam64 ID from profile (handles both vanity URLs and numeric IDs)"""
+    profile = profile.strip()
+    if profile.isdigit():
+        return profile
+    return resolve_vanity_url(profile)
 
 def send_to_webhook(data):
     """Send data to the webhook service"""
@@ -72,59 +55,102 @@ def send_to_webhook(data):
     except Exception as e:
         print(f"Error sending to webhook: {e}")
 
+class SteamKind:
+    PLAYING = "Currently In-Game"
+    NOT_PLAYING = "Not Playing"
+
+def get_player_summaries_with_backoff(steam_ids, retry_count=0):
+    """Get player summaries with exponential backoff for 429 errors"""
+    if not steam_api_key:
+        logger.error("STEAM_API_KEY not set")
+        return {}
+
+    try:
+        response = requests.get(
+            STEAM_API_BASE,
+            params={"key": steam_api_key, "steamids": ",".join(steam_ids)}
+        )
+
+        if response.status_code == 429:
+            if retry_count < 5:
+                wait_time = (2 ** retry_count) * 60
+                logger.warning(f"Rate limited. Waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                return get_player_summaries_with_backoff(steam_ids, retry_count + 1)
+            else:
+                logger.error("Max retries reached for rate limit")
+                return {}
+
+        response.raise_for_status()
+        data = response.json()
+        players = data.get("response", {}).get("players", [])
+
+        return {player["steamid"]: player for player in players}
+    except Exception as e:
+        logger.error(f"Error fetching player summaries: {e}")
+        return {}
+
 def get_playing_profiles(profiles_to_watch) -> dict:
-    # Load cookies each time in case they change
-    cookies = load_cookies()
+    steam_ids = []
+    profile_map = {}
 
     for profile in profiles_to_watch:
+        steam_id = get_steam_id(profile)
+        if steam_id:
+            steam_ids.append(steam_id)
+            profile_map[steam_id] = profile
+
+    if not steam_ids:
+        logger.error("No valid Steam profiles to watch")
+        time.sleep(offline_check_interval)
+        return playing_profiles
+
+    player_data = get_player_summaries_with_backoff(steam_ids)
+
+    if not player_data:
+        time.sleep(offline_check_interval)
+        return playing_profiles
+
+    someone_playing = False
+
+    for steam_id, data in player_data.items():
+        profile = profile_map[steam_id]
         game = None
         status = SteamKind.NOT_PLAYING
 
-        try:
-            response = requests.get(
-                get_profile_url(profile),
-                headers=HEADERS,
-                cookies=cookies
-            )
-            response.raise_for_status()
+        if "gameextrainfo" in data:
+            status = SteamKind.PLAYING
+            game = data["gameextrainfo"]
+            someone_playing = True
 
-            soup = BeautifulSoup(response.content, 'html.parser')
-
-            profile_element = soup.find("div", class_="profile_in_game_header")
-            game_element = soup.find("div", class_="profile_in_game_name")
-
-            if profile_element and SteamKind.PLAYING in profile_element.get_text(strip=True):
-                status = SteamKind.PLAYING
-                if game_element:
-                    game = game_element.get_text(strip=True)
-
-            if playing_profiles.get(profile, {}).get("status") != status and status == SteamKind.PLAYING:
-                send_to_webhook({
-                    "profile": profile,
-                    "status": status,
-                    "game": game,
-                })
-
-            playing_profiles[profile] = {
+        if playing_profiles.get(profile, {}).get("status") != status and status == SteamKind.PLAYING:
+            send_to_webhook({
+                "profile": profile,
                 "status": status,
                 "game": game,
-            }
-        except Exception as e:
-            logger.error(f"Error fetching profile {profile}: {e}")
-            playing_profiles[profile] = {
-                "status": "Error",
-                "game": None,
-                "error": str(e)
-            }
+            })
 
-    time.sleep(cooldown_time)
+        playing_profiles[profile] = {
+            "status": status,
+            "game": game,
+        }
+
+    check_interval = active_check_interval if someone_playing else offline_check_interval
+    time.sleep(check_interval)
+
     return playing_profiles
 
-
 def main():
+    if not steam_api_key:
+        logger.error("STEAM_API_KEY environment variable is required")
+        return
+
+    logger.info(f"Starting Steam monitor for {len(profiles_to_watch)} profiles")
+    logger.info(f"Active check interval: {active_check_interval}s")
+    logger.info(f"Offline check interval: {offline_check_interval}s")
+
     while True:
         profiles = get_playing_profiles(profiles_to_watch)
-
 
 if __name__ == "__main__":
     main()
