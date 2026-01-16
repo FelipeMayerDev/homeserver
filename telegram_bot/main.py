@@ -263,18 +263,21 @@ def format_tldr_stats(stats):
     return stats_text
 
 
-@router.message(F.text.contains('@'))
+@router.message(F.text.contains('@') | F.caption.contains('@'))
 async def mention_handler(message: types.Message):
     # Only respond to admin mentions
     bot_username = (await message.bot.get_me()).username
     admin_username = "Fockytheguy"
 
-    if message.from_user.username != admin_username and bot_username not in message.text and not message.text:
+    # Get text from either text or caption (for media messages)
+    message_text = message.text or message.caption or ""
+
+    if message.from_user.username != admin_username and bot_username not in message_text and not message_text:
         return
 
     try:
         # Extract the question (remove bot mention)
-        question = message.text.replace(f"@{bot_username}", "").strip()
+        question = message_text.replace(f"@{bot_username}", "").strip()
 
         # Check for images and prepare context
         image_url = None
