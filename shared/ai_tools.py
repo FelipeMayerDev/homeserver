@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
@@ -28,27 +29,52 @@ class Z_Ai:
         self.chat_model = "glm-4.7"
         self.vision_model = "glm-4.6v"
 
-    def chat(self, mensagem_usuario, historico=None, image_url=None):
+    def _download_image_as_base64(self, image_url: str) -> str:
+        """Baixa a imagem de uma URL e retorna como base64."""
+        try:
+            response = requests.get(image_url, timeout=10)
+            response.raise_for_status()
+            image_base64 = base64.b64encode(response.content).decode('utf-8')
+
+            # Detect content type from response or default to jpeg
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
+            if content_type.startswith('image/'):
+                content_type = content_type.split('/')[1]
+
+            return f"data:image/{content_type};base64,{image_base64}"
+        except Exception as e:
+            logging.error(f"Erro ao baixar imagem: {e}")
+            raise
+
+    def chat(self, mensagem_usuario, historico=None, image_url=None, image_base64=None):
         """
         Envia uma mensagem para a API e retorna a resposta.
-        Se image_url for fornecido, usa o modelo de visão.
+        Se image_url for fornecido, baixa a imagem e converte para base64.
+        Se image_base64 for fornecido, usa diretamente.
         """
         messages = []
 
         if historico:
             messages.extend(historico)
 
+        # Process image: if URL provided, download and convert to base64
+        processed_image = None
+        if image_url and not image_base64:
+            processed_image = self._download_image_as_base64(image_url)
+        elif image_base64:
+            processed_image = image_base64
+
         # Seleciona o modelo baseado na presença de imagem
-        model = self.vision_model if image_url else self.chat_model
+        model = self.vision_model if processed_image else self.chat_model
 
         # Formata o conteúdo da mensagem
-        if image_url:
+        if processed_image:
             content = [
                 {"type": "text", "text": mensagem_usuario},
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": image_url
+                        "url": processed_image
                     }
                 }
             ]
