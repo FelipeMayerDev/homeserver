@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from serpapi import GoogleSearch
 from random import randint
 from openai import OpenAI
+import base64
 import requests
 import re
 
@@ -19,6 +20,54 @@ def remove_think_tags(text: str) -> str:
     cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
     # Optionally strip excess whitespace left behind
     return cleaned.strip()
+
+
+class Z_Ai:
+    def __init__(self):
+        self.client = OpenAI(api_key=os.getenv("Z_AI_API_KEY"), base_url="https://api.z.ai/api/coding/paas/v4/")
+        self.chat_model = "glm-4.7"
+        self.vision_model = "glm-4.6v"
+
+    def chat(self, mensagem_usuario, historico=None, image_url=None):
+        """
+        Envia uma mensagem para a API e retorna a resposta.
+        Se image_url for fornecido, usa o modelo de visão.
+        """
+        messages = []
+
+        if historico:
+            messages.extend(historico)
+
+        # Seleciona o modelo baseado na presença de imagem
+        model = self.vision_model if image_url else self.chat_model
+
+        # Formata o conteúdo da mensagem
+        if image_url:
+            content = [
+                {"type": "text", "text": mensagem_usuario},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_url
+                    }
+                }
+            ]
+        else:
+            content = mensagem_usuario
+
+        messages.append({"role": "user", "content": content})
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            return f"Erro ao chamar a API: {e}"
 
 
 class GroqAPI:
@@ -151,7 +200,8 @@ class LMStudioAPI:
 
 
 
-# Initialize API instances for export
+Initialize API instances for export
 GROQ_API = GroqAPI()
 LM_STUDIO_API = LMStudioAPI()
 GOOGLE_IMAGE_API = GoogleSearchAPI()
+Z_AI_API = Z_Ai()

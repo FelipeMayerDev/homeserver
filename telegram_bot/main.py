@@ -9,7 +9,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from instant_view import generate_telegraph, init_telegraph
-from shared.ai_tools import GROQ_API, GOOGLE_IMAGE_API, LM_STUDIO_API
+from shared.ai_tools import Z_AI_API
 from utils import transcribe_media, send_image_with_button, send_media_stream, is_valid_link, VideoNotFound, process_youtube_video
 from shared.database import History
 
@@ -35,12 +35,12 @@ async def cmd_resume(message: types.Message, command: CommandObject):
     if not command.args:
         await message.reply("Por favor, forneça um link de um vídeo do YouTube. Exemplo: /resume https://www.youtube.com/watch?v=example")
         return
-    
+
     # Check if it's a valid YouTube link
     if "youtube.com" not in command.args and "youtu.be" not in command.args:
         await message.reply("Por favor, forneça um link válido do YouTube.")
         return
-    
+
     try:
         # Process the YouTube video
         processing_message = await message.reply("Processando seu vídeo...")
@@ -72,44 +72,44 @@ async def cmd_tldr(message: types.Message, command: CommandObject):
         # Get message limit (default 100)
         limit = int(command.args) if command.args and command.args.isdigit() else 100
         processing_message = await message.reply("🔄 Analisando mensagens...")
-        
+
         history = History()
         if not history:
             await processing_message.edit_text("❌ Erro ao acessar histórico de mensagens.")
             return
-            
+
         messages = history.get_all_messages(limit)
-        
+
         if not messages:
             await processing_message.edit_text("❌ Não há mensagens no histórico.")
             return
-        
+
         conversation, stats = prepare_messages_for_tldr(messages)
-        
+
         if not conversation.strip():
             stats_text = format_tldr_stats(stats)
             await processing_message.edit_text(f"❌ Não há mensagens de texto válidas para resumir.{stats_text}", parse_mode="HTML")
             return
-        
+
         # Generate AI summary
         prompt = f"Faça um resumo conciso das principais discussões desta conversa em português:\n\n{conversation} Retorne sem tags HTML."
         if LM_STUDIO_API.is_avaiable():
             summary = LM_STUDIO_API.chat(prompt)
         else:
             summary = GROQ_API.chat(prompt)
-        
+
         if not summary or summary.strip() == "":
             await processing_message.edit_text("❌ Erro ao gerar resumo com IA.")
             return
-        
+
         # Format response with statistics
         stats_text = format_tldr_stats(stats)
         response = f"📝 <b>Resumo da conversa:</b>\n\n{summary}{stats_text}"
-        
+
         # Telegram message limit is 4096 characters
         if len(response) > 4000:
             response = response[:3900] + "...\n\n[Mensagem truncada]"
-        
+
         await processing_message.edit_text(response, parse_mode="HTML")
         save_message_to_history(message, message.bot)
 
@@ -137,104 +137,104 @@ def prepare_messages_for_tldr(messages, max_chars=4000):
         'user_counts': {},
         'user_characters': {}
     }
-    
+
     for msg in reversed(messages):  # most recent first
         # Handle potential database schema variations
         if len(msg) < 8:
             stats['media_ignored'] += 1
             continue
-            
+
         # Database schema: id, user, message_id, text, replied_to, from_bot, kind, created
         # Skip the id field and unpack the rest
         _, user, message_id, text, replied_to, from_bot, kind, created = msg
-        
+
         # Skip if it's from a bot
         if from_bot:
             stats['bots_ignored'] += 1
             continue
-            
+
         # Skip if not text (media)
         if not text or kind != "text":
             stats['media_ignored'] += 1
             continue
-            
+
         # Skip very short messages
         if len(text.strip()) < 5:
             stats['short_ignored'] += 1
             continue
-            
+
         # Skip commands
         if text.startswith('/'):
             stats['commands_ignored'] += 1
             continue
-            
+
         # Skip links
         if 'http' in text.lower():
             stats['links_ignored'] += 1
             continue
-            
+
         # Skip if only mentions/emojis
         if text.startswith('@') or len(text.replace(' ', '')) < 3:
             stats['emoji_ignored'] += 1
             continue
-            
+
         # Skip messages with too many emoji/special characters
         if len(text) > 0:  # Prevent division by zero
             alpha_ratio = sum(c.isalnum() or c.isspace() for c in text) / len(text)
             if alpha_ratio < 0.6:
                 stats['emoji_ignored'] += 1
                 continue
-        
+
         # Valid message - add to filtered list
         filtered.append(f"{user}: {text}")
-        
+
         # Count messages by user
         if user in stats['user_counts']:
             stats['user_counts'][user] += 1
         else:
             stats['user_counts'][user] = 1
-        
+
         # Count characters by user
         if user in stats['user_characters']:
             stats['user_characters'][user] += len(text)
         else:
             stats['user_characters'][user] = len(text)
-        
+
         # Mark first included message (oldest)
         if stats['oldest_message'] is None:
             stats['oldest_message'] = (user, created)
-    
+
     # Truncate by characters if necessary
     conversation = "\n".join(filtered)
     if len(conversation) > max_chars:
         conversation = conversation[:max_chars] + "..."
-    
+
     return conversation, stats
 
 
 def format_tldr_stats(stats):
     """Formats the summary statistics."""
-    total_ignored = (stats['media_ignored'] + stats['bots_ignored'] + 
-                    stats['links_ignored'] + stats['commands_ignored'] + 
+    total_ignored = (stats['media_ignored'] + stats['bots_ignored'] +
+                    stats['links_ignored'] + stats['commands_ignored'] +
                     stats['short_ignored'] + stats['emoji_ignored'])
-    
+
     stats_text = "\n\n📊 <b>Estatísticas:</b>\n"
     stats_text += f"• {stats['total_messages']} mensagens analisadas\n"
     stats_text += f"• {total_ignored} ignoradas ({stats['media_ignored']} mídias, {stats['bots_ignored']} bots, etc.)\n"
-    
+
     # Add user statistics (messages and characters)
     if stats['user_counts']:
         # Find who talked the most (by characters)
         if stats['user_characters']:
             most_talkative_user = max(stats['user_characters'].items(), key=lambda x: x[1])
             user_name, char_count = most_talkative_user
-            
+
             # Special message for Wdiegon
             if user_name.lower() == "wdiegon":
                 stats_text += f"• Quem falou mais: {user_name}, rei do lero lero\n"
             else:
                 stats_text += f"• Quem falou mais: {user_name}\n"
-        
+
         stats_text += "• Atividade por usuário:\n"
         # Sort users by message count (descending)
         sorted_users = sorted(stats['user_counts'].items(), key=lambda x: x[1], reverse=True)
@@ -243,7 +243,7 @@ def format_tldr_stats(stats):
             stats_text += f"  - {user}: {msg_count} msgs, {char_count} chars\n"
         if len(sorted_users) > 5:
             stats_text += f"  - E mais {len(sorted_users) - 5} usuários...\n"
-    
+
     if stats['oldest_message']:
         user, created = stats['oldest_message']
         # Format timestamp more readably
@@ -259,26 +259,70 @@ def format_tldr_stats(stats):
             # Fallback to raw timestamp if parsing fails
             formatted_time = str(created)[:16] if created else "Unknown"
         stats_text += f"• Resumo desde: {formatted_time} ({user})"
-    
+
     return stats_text
 
 
 @router.message(F.text.contains('@'))
 async def mention_handler(message: types.Message):
-    # Check if the message is a mention of the bot
+    # Only respond to admin mentions
     bot_username = (await message.bot.get_me()).username
-    if bot_username not in message.text:
+    admin_username = "Fockytheguy"
+
+    if message.from_user.username != admin_username and bot_username not in message.text and not message.text:
         return
 
-    if message.text:
-        try:
-            response = GROQ_API.chat(message.text)
-            logging.info(f"Mention response: {response}")
-            await message.reply(response)
-            save_message_to_history(message, message.bot)
-        except Exception as e:
-            logging.error(f"Error processing mention: {e}")
-            await message.reply("Desculpe, ocorreu um erro ao processar sua solicitação.")
+    try:
+        # Extract the question (remove bot mention)
+        question = message.text.replace(f"@{bot_username}", "").strip()
+
+        # Check for images and prepare context
+        image_url = None
+        context_parts = []
+
+        # Check if this is a reply to another message
+        if message.reply_to_message:
+            replied_msg = message.reply_to_message
+            original_user = replied_msg.from_user.username if replied_msg.from_user else "Unknown"
+            original_text = replied_msg.text or "[mídia/sem texto]"
+
+            context_parts.append(f"Contexto: {original_user} disse: '{original_text}'")
+            context_parts.append(f"Pergunta de {message.from_user.username}: {question}")
+
+            # Check for image in the replied message
+            if replied_msg.photo:
+                # Get the largest photo
+                photo = replied_msg.photo[-1]
+                file = await message.bot.get_file(photo.file_id)
+                image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path}"
+            elif replied_msg.document and replied_msg.document.mime_type and replied_msg.document.mime_type.startswith('image/'):
+                file = await message.bot.get_file(replied_msg.document.file_id)
+                image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path}"
+        else:
+            context_parts.append(f"Pergunta de {message.from_user.username}: {question}")
+
+            # Check for image in the current message
+            if message.photo:
+                photo = message.photo[-1]
+                file = await message.bot.get_file(photo.file_id)
+                image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path}"
+            elif message.document and message.document.mime_type and message.document.mime_type.startswith('image/'):
+                file = await message.bot.get_file(message.document.file_id)
+                image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path}"
+
+        # Build the final prompt
+        prompt = "\n".join(context_parts) if context_parts else question
+
+        # Call Z_AI with or without image
+        response = Z_AI_API.chat(prompt, image_url=image_url)
+
+        logging.info(f"Mention response: {response}")
+        await message.reply(response)
+        save_message_to_history(message, message.bot)
+
+    except Exception as e:
+        logging.error(f"Error processing mention: {e}")
+        await message.reply("Desculpe, ocorreu um erro ao processar sua solicitação.")
 
 
 @router.callback_query(F.data.startswith("another_image:"))
@@ -318,7 +362,7 @@ async def voice_handler(message: types.Message, bot: Bot):
 @router.message(F.text)
 async def text_handler(message: types.Message, bot: Bot):
     save_message_to_history(message, bot)
-    
+
     if len(message.text.split(' ')) > 1:
         return
 
@@ -340,13 +384,13 @@ def save_message_to_history(message: types.Message, bot: Bot) -> None:
         if not history:
             logging.error("Failed to initialize History database")
             return
-        
+
         # Determine if the message is from the bot itself
         from_bot = message.from_user.id == bot.id if message.from_user else False
-        
+
         # Get replied_to message ID if it exists
         replied_to = str(message.reply_to_message.message_id) if message.reply_to_message else None
-        
+
         # Determine message kind
         kind = None
         if message.text:
@@ -365,7 +409,7 @@ def save_message_to_history(message: types.Message, bot: Bot) -> None:
             kind = "sticker"
         elif message.video_note:
             kind = "video_note"
-        
+
         # Save the message to the database
         history.save_message(
             user=str(message.from_user.username or message.from_user.id) if message.from_user else "Unknown",
