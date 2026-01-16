@@ -52,7 +52,12 @@ class Z_Ai:
         Se image_url for fornecido, baixa a imagem e converte para base64.
         Se image_base64 for fornecido, usa diretamente.
         """
-        messages = []
+        messages = [
+            {
+                "role": "system",
+                "content": "Você está em um grupo de Telegram com amigos. Sua função é entreter o grupo. Respostas devem ser curtas e objetivas sempre que possível. Use humor ácido e responda como se fosse um ser humano, não como uma IA robótica."
+            }
+        ]
 
         if historico:
             messages.extend(historico)
