@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -18,7 +19,38 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ALLOWED_USERS_FILE = os.path.join(os.path.dirname(__file__), "allowed_users.json")
 router = Router()
+
+
+def load_allowed_users():
+    """Load the list of allowed users from JSON file."""
+    try:
+        with open(ALLOWED_USERS_FILE, 'r') as f:
+            data = json.load(f)
+            return set(data.get('allowed_users', []))
+    except Exception as e:
+        logging.error(f"Error loading allowed users: {e}")
+        return {'Fockytheguy'}
+
+
+def save_allowed_users(allowed_users):
+    """Save the list of allowed users to JSON file."""
+    try:
+        with open(ALLOWED_USERS_FILE, 'w') as f:
+            json.dump({'allowed_users': list(allowed_users)}, f, indent=4)
+        return True
+    except Exception as e:
+        logging.error(f"Error saving allowed users: {e}")
+        return False
+
+
+def is_user_allowed(username):
+    """Check if a user is allowed to use the bot."""
+    if not username:
+        return False
+    allowed_users = load_allowed_users()
+    return username in allowed_users
 
 
 @router.message(Command("image"))
@@ -28,6 +60,90 @@ async def cmd_image(message: types.Message, command: CommandObject):
         return
     response = await send_image_with_button(message, command.args)
     save_message_to_history(message, message.bot)
+
+
+@router.message(Command("add_user"))
+async def cmd_add_user(message: types.Message, command: CommandObject):
+    """Add a user to the allowed users list."""
+    # Only allow Fockytheguy to add users
+    if message.from_user.username != "Fockytheguy":
+        await message.reply("❌ Apenas o @Fockytheguy pode adicionar usuários.")
+        return
+
+    if not command.args:
+        await message.reply("Por favor, forneça o username. Exemplo: /add_user @nome_do_usuario")
+        return
+
+    # Clean the username (remove @ if present)
+    username = command.args.strip().lstrip('@')
+
+    if not username:
+        await message.reply("❌ Username inválido.")
+        return
+
+    allowed_users = load_allowed_users()
+
+    if username in allowed_users:
+        await message.reply(f"❌ O usuário @{username} já está na lista de permitidos.")
+        return
+
+    allowed_users.add(username)
+
+    if save_allowed_users(allowed_users):
+        await message.reply(f"✅ Usuário @{username} adicionado à lista de permitidos.")
+    else:
+        await message.reply("❌ Erro ao salvar a lista de usuários.")
+
+
+@router.message(Command("remove_user"))
+async def cmd_remove_user(message: types.Message, command: CommandObject):
+    """Remove a user from the allowed users list."""
+    # Only allow Fockytheguy to remove users
+    if message.from_user.username != "Fockytheguy":
+        await message.reply("❌ Apenas o @Fockytheguy pode remover usuários.")
+        return
+
+    if not command.args:
+        await message.reply("Por favor, forneça o username. Exemplo: /remove_user @nome_do_usuario")
+        return
+
+    # Clean the username (remove @ if present)
+    username = command.args.strip().lstrip('@')
+
+    if not username:
+        await message.reply("❌ Username inválido.")
+        return
+
+    allowed_users = load_allowed_users()
+
+    if username not in allowed_users:
+        await message.reply(f"❌ O usuário @{username} não está na lista de permitidos.")
+        return
+
+    # Prevent removing the owner
+    if username == "Fockytheguy":
+        await message.reply("❌ Você não pode remover o @Fockytheguy da lista.")
+        return
+
+    allowed_users.remove(username)
+
+    if save_allowed_users(allowed_users):
+        await message.reply(f"✅ Usuário @{username} removido da lista de permitidos.")
+    else:
+        await message.reply("❌ Erro ao salvar a lista de usuários.")
+
+
+@router.message(Command("list_users"))
+async def cmd_list_users(message: types.Message):
+    """List all allowed users."""
+    allowed_users = load_allowed_users()
+
+    if not allowed_users:
+        await message.reply("📋 Nenhum usuário permitido configurado.")
+        return
+
+    users_list = "\n".join([f"• @{user}" for user in sorted(allowed_users)])
+    await message.reply(f"📋 <b>Usuários permitidos:</b>\n\n{users_list}", parse_mode="HTML")
 
 
 @router.message(Command("resume"))
@@ -265,14 +381,18 @@ def format_tldr_stats(stats):
 
 @router.message(F.text.contains('@') | F.caption.contains('@'))
 async def mention_handler(message: types.Message):
-    # Only respond to admin mentions
+    # Only respond to allowed users
     bot_username = (await message.bot.get_me()).username
-    admin_username = "Fockytheguy"
 
     # Get text from either text or caption (for media messages)
     message_text = message.text or message.caption or ""
 
-    if message.from_user.username != admin_username and bot_username not in message_text and not message_text:
+    # Check if bot is mentioned and user is allowed
+    if f"@{bot_username}" not in message_text:
+        return
+
+    # Check if user is allowed
+    if not is_user_allowed(message.from_user.username):
         return
 
     try:
