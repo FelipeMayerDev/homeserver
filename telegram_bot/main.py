@@ -22,6 +22,10 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ALLOWED_USERS_FILE = os.path.join(os.path.dirname(__file__), "allowed_users.json")
 router = Router()
 
+# Track consecutive messages per user
+consecutive_messages = {}
+last_user = None
+
 
 def load_allowed_users():
     """Load the list of allowed users from JSON file."""
@@ -484,6 +488,23 @@ async def voice_handler(message: types.Message, bot: Bot):
 
 @router.message(F.text)
 async def text_handler(message: types.Message, bot: Bot):
+    global consecutive_messages, last_user
+
+    current_user = message.from_user.username if message.from_user else message.from_user.id
+
+    # Reset counter if different user
+    if last_user != current_user:
+        consecutive_messages = {}
+        last_user = current_user
+
+    # Increment counter for current user
+    consecutive_messages[current_user] = consecutive_messages.get(current_user, 0) + 1
+
+    # Check if user exceeded 6 consecutive messages
+    if consecutive_messages[current_user] > 6:
+        consecutive_messages[current_user] = 0
+        await message.reply_photo("https://pbs.twimg.com/media/EmUwc6jU0AEq4DB.jpg")
+
     save_message_to_history(message, bot)
 
     if len(message.text.split(' ')) > 1:
