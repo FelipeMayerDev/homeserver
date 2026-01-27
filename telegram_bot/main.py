@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import sys
 import os.path
 from dotenv import load_dotenv
@@ -21,10 +22,6 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ALLOWED_USERS_FILE = os.path.join(os.path.dirname(__file__), "allowed_users.json")
 router = Router()
-
-# Track consecutive messages per user
-consecutive_messages = {}
-last_user = None
 
 
 def load_allowed_users():
@@ -488,22 +485,23 @@ async def voice_handler(message: types.Message, bot: Bot):
 
 @router.message(F.text)
 async def text_handler(message: types.Message, bot: Bot):
-    global consecutive_messages, last_user
+    flood_images = [
+        "https://pbs.twimg.com/media/EmUwc6jU0AEq4DB.jpg",
+        "https://pbs.twimg.com/media/G1ngqReWEAAccuN.png"
+    ]
 
-    current_user = message.from_user.username if message.from_user else message.from_user.id
+    random_reply_images = [
+        "https://i.ibb.co/HLFszQv8/image.png",
+        "https://i.ibb.co/ZDfqP4k/rubi.png"
+    ]
 
-    # Reset counter if different user
-    if last_user != current_user:
-        consecutive_messages = {}
-        last_user = current_user
+    # Check if message is 200+ characters and reply with random flood image
+    if message.text and len(message.text) >= 200:
+        await message.reply_photo(random.choice(flood_images))
 
-    # Increment counter for current user
-    consecutive_messages[current_user] = consecutive_messages.get(current_user, 0) + 1
-
-    # Check if user exceeded 6 consecutive messages
-    if consecutive_messages[current_user] > 6:
-        consecutive_messages[current_user] = 0
-        await message.reply_photo("https://pbs.twimg.com/media/EmUwc6jU0AEq4DB.jpg")
+    # 5% chance to send a random image reply
+    if random.random() < 0.05:
+        await message.reply_photo(random.choice(random_reply_images))
 
     save_message_to_history(message, bot)
 
