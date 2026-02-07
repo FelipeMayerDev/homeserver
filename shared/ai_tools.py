@@ -27,7 +27,7 @@ def remove_think_tags(text: str) -> str:
 class Z_Ai:
     def __init__(self):
         self.client = ZaiClient(api_key=os.getenv("Z_AI_API_KEY"))
-        self.chat_model = "glm-4.7"
+        self.chat_model = "glm-4.6"
         self.vision_model = "glm-4.6v"
 
     def _download_image_as_base64(self, image_url: str) -> str:
