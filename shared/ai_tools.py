@@ -5,7 +5,8 @@ from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
 from random import randint
-from openai import OpenAI
+from openai import OpenAI  # Keep for LM Studio
+from zai import ZaiClient  # Official z.ai SDK
 import base64
 import requests
 import re
@@ -25,7 +26,7 @@ def remove_think_tags(text: str) -> str:
 
 class Z_Ai:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("Z_AI_API_KEY"), base_url="https://api.z.ai/api/coding/paas/v4/")
+        self.client = ZaiClient(api_key=os.getenv("Z_AI_API_KEY"))
         self.chat_model = "glm-4.7"
         self.vision_model = "glm-4.6v"
 
