@@ -1,7 +1,6 @@
 import os
 import time
 import logging
-import asyncio
 from groq import Groq
 from dotenv import load_dotenv
 from serpapi import GoogleSearch
@@ -9,7 +8,7 @@ from random import randint
 from openai import OpenAI  # Keep for LM Studio
 from zai import ZaiClient  # Official z.ai SDK
 import base64
-import aiohttp
+import requests
 import re
 
 load_dotenv()
@@ -30,46 +29,27 @@ class Z_Ai:
         self.client = ZaiClient(api_key=os.getenv("Z_AI_API_KEY"))
         self.chat_model = "glm-4.7"
         self.vision_model = "glm-4.6v"
-        self._api_timeout = 60  # seconds
 
-    async def _download_image_as_base64(self, image_url: str) -> str:
-        """Baixa a imagem de uma URL e retorna como base64 de forma assíncrona."""
+    def _download_image_as_base64(self, image_url: str) -> str:
+        """Baixa a imagem de uma URL e retorna como base64."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    response.raise_for_status()
-                    image_bytes = await response.read()
-                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            response = requests.get(image_url, timeout=10)
+            response.raise_for_status()
+            image_base64 = base64.b64encode(response.content).decode('utf-8')
 
-                    # Detect content type from response or default to jpeg
-                    content_type = response.headers.get('Content-Type', 'image/jpeg')
-                    if content_type.startswith('image/'):
-                        content_type = content_type.split('/')[1]
+            # Detect content type from response or default to jpeg
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
+            if content_type.startswith('image/'):
+                content_type = content_type.split('/')[1]
 
-                    return f"data:image/{content_type};base64,{image_base64}"
-        except asyncio.TimeoutError:
-            logging.error(f"Timeout ao baixar imagem: {image_url}")
-            raise
+            return f"data:image/{content_type};base64,{image_base64}"
         except Exception as e:
             logging.error(f"Erro ao baixar imagem: {e}")
             raise
 
-    def _make_api_call_sync(self, model, messages):
-        """Chamada síncrona à API do z.ai (executada em thread separada)."""
-        try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.7,
-                timeout=self._api_timeout
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Erro ao chamar a API: {e}"
-
-    async def chat(self, mensagem_usuario, historico=None, image_url=None, image_base64=None):
+    def chat(self, mensagem_usuario, historico=None, image_url=None, image_base64=None):
         """
-        Envia uma mensagem para a API de forma assíncrona e retorna a resposta.
+        Envia uma mensagem para a API e retorna a resposta.
         Se image_url for fornecido, baixa a imagem e converte para base64.
         Se image_base64 for fornecido, usa diretamente.
         """
@@ -86,7 +66,7 @@ class Z_Ai:
         # Process image: if URL provided, download and convert to base64
         processed_image = None
         if image_url and not image_base64:
-            processed_image = await self._download_image_as_base64(image_url)
+            processed_image = self._download_image_as_base64(image_url)
         elif image_base64:
             processed_image = image_base64
 
@@ -109,14 +89,17 @@ class Z_Ai:
 
         messages.append({"role": "user", "content": content})
 
-        # Executa a chamada bloqueante em uma thread separada para não bloquear o event loop
-        loop = asyncio.get_event_loop()
-        result = await asyncio.wait_for(
-            asyncio.to_thread(self._make_api_call_sync, model, messages),
-            timeout=self._api_timeout + 5  # buffer time
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7
+            )
 
-        return result
+            return response.choices[0].message.content
+
+        except Exception as e:
+            return f"Erro ao chamar a API: {e}"
 
 
 class GroqAPI:

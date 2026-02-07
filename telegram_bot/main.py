@@ -437,8 +437,8 @@ async def mention_handler(message: types.Message):
         # Build the final prompt
         prompt = "\n".join(context_parts) if context_parts else question
 
-        # Call Z_AI with or without image (async call)
-        response = await Z_AI_API.chat(prompt, image_url=image_url)
+        # Call Z_AI with or without image
+        response = Z_AI_API.chat(prompt, image_url=image_url)
 
         logging.info(f"Mention response: {response}")
         await message.reply(response)
